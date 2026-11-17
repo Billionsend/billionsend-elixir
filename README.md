@@ -210,7 +210,7 @@ A request is retried when repeating it is safe: GET, PUT and DELETE, and any req
 | `timeout:` | | `60_000` ms per attempt (an event stream waits at least 60 s for each read) |
 | `max_retries:` | | `2` |
 | `default_headers:` | | none |
-| `transport:` | | the HTTP layer, `{module, state}` implementing `BillionSend.Transport` (`BillionSend.Transport.Httpc` by default: `:httpc` over `:ssl`, verifying the server against the system's CA store) |
+| `transport:` | | the HTTP layer, `{module, state}` implementing `BillionSend.Transport` (`BillionSend.Transport.Httpc` by default: requests through `:httpc` in a profile of the SDK's own, one connection each; event streams on their own HTTP/1.1 connection that hands every event out as it arrives; both over `:ssl`, verifying the server against the system's CA store) |
 
 ## Development
 

@@ -215,7 +215,7 @@ defmodule BillionSend.Client do
           {:ok, handle}
 
         {:ok, response, handle} ->
-          body = read_all(module, state, handle, "")
+          body = (response.body || "") <> read_all(module, state, handle, "")
           module.close_stream(state, handle)
           {:error, error_from(%{response | body: body})}
 
@@ -227,7 +227,7 @@ defmodule BillionSend.Client do
 
   defp read_all(module, state, handle, acc) do
     case module.next_chunk(state, handle) do
-      {:ok, chunk} -> read_all(module, state, handle, acc <> chunk)
+      {:ok, chunk, handle} -> read_all(module, state, handle, acc <> chunk)
       _ -> acc
     end
   end

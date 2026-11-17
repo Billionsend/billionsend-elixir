@@ -242,9 +242,16 @@ defmodule BillionSend.EventStream do
     {module, state} = s.client.transport
 
     case module.next_chunk(state, s.handle) do
-      {:ok, chunk} ->
+      {:ok, chunk, handle} ->
         {events, decoder} = SSEDecoder.feed(s.decoder, chunk)
-        s = %{s | decoder: decoder, failures: if(events == [], do: s.failures, else: 0)}
+
+        s = %{
+          s
+          | handle: handle,
+            decoder: decoder,
+            failures: if(events == [], do: s.failures, else: 0)
+        }
+
         {out, s} = Enum.reduce(events, {[], s}, &saw/2)
         s = if s.closed, do: release(s), else: s
         {Enum.reverse(out), s}

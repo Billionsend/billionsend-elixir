@@ -125,15 +125,17 @@ defmodule BillionSend.TransportTest do
 
     serve(
       fn s ->
-        :gen_tcp.send(
-          s,
-          "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n"
-        )
-
         first =
           ~s(id: 1\nevent: inbox.email.received\ndata: {"type":"inbox.email.received","inbox_id":"i","data":{}}\n\n)
 
-        :gen_tcp.send(s, Integer.to_string(byte_size(first), 16) <> "\r\n" <> first <> "\r\n")
+        # The head and the first event in one write, and nothing more until the
+        # client has the event: it must not wait for the next bytes.
+        :gen_tcp.send(
+          s,
+          "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n" <>
+            Integer.to_string(byte_size(first), 16) <> "\r\n" <> first <> "\r\n"
+        )
+
         send(parent, {:server, self()})
 
         receive do
@@ -143,12 +145,60 @@ defmodule BillionSend.TransportTest do
         end
       end,
       fn url ->
-        {:ok, stream} = BillionSend.Inboxes.Events.stream(client(url, sleep: fn _ -> :ok end))
+        {:ok, stream} = BillionSend.Inboxes.Events.stream(client(url), max_reconnects: 0)
+        started = System.monotonic_time(:millisecond)
         assert [%BillionSend.InboxStreamEvent{id: "1"}] = Enum.take(stream, 1)
+        assert System.monotonic_time(:millisecond) - started < 1_000
         assert_received {:request, head, _}
         assert head =~ ~r/accept: text\/event-stream/i
         assert_receive {:server, pid}
         send(pid, :release)
+      end
+    )
+  end
+
+  test "chunks split anywhere and several in one read" do
+    event = fn id ->
+      ~s(id: #{id}\nevent: inbox.email.received\ndata: {"type":"inbox.email.received","inbox_id":"i","data":{}}\n\n)
+    end
+
+    chunk = fn text -> Integer.to_string(byte_size(text), 16) <> "\r\n" <> text <> "\r\n" end
+    wire = chunk.(event.(1)) <> chunk.(event.(2)) <> chunk.(event.(3))
+
+    serve(
+      fn s ->
+        :gen_tcp.send(
+          s,
+          "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n"
+        )
+
+        {a, b} = String.split_at(wire, 7)
+        :gen_tcp.send(s, a)
+        Process.sleep(50)
+        :gen_tcp.send(s, b)
+        Process.sleep(200)
+        :gen_tcp.send(s, "0\r\n\r\n")
+      end,
+      fn url ->
+        {:ok, stream} = BillionSend.Inboxes.Events.stream(client(url))
+        assert Enum.map(Enum.take(stream, 3), & &1.id) == ~w(1 2 3)
+      end
+    )
+  end
+
+  test "a refused event stream is an error at once" do
+    body = ~s({"statusCode":403,"name":"forbidden","message":"Needs a team-wide key"})
+
+    serve(
+      fn s ->
+        :gen_tcp.send(
+          s,
+          "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: #{byte_size(body)}\r\nConnection: close\r\n\r\n#{body}"
+        )
+      end,
+      fn url ->
+        assert {:error, %BillionSend.PermissionDeniedError{message: "Needs a team-wide key"}} =
+                 BillionSend.Inboxes.Events.stream(client(url))
       end
     )
   end

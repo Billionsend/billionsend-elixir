@@ -485,7 +485,7 @@ defmodule BillionSend.Test.Mock do
   def next_chunk(mock, ref) do
     Agent.get_and_update(mock, fn s ->
       case s.streams[ref] do
-        %{chunks: [chunk | rest]} -> {{:ok, chunk}, put_in(s, [:streams, ref, :chunks], rest)}
+        %{chunks: [chunk | rest]} -> {{:ok, chunk, ref}, put_in(s, [:streams, ref, :chunks], rest)}
         %{error: nil} -> {:done, s}
         %{error: error} -> {{:error, error}, put_in(s, [:streams, ref, :error], nil)}
       end
