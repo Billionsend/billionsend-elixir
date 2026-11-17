@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (Elixir ${{ matrix.elixir }}, OTP ${{ matrix.otp }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - elixir: "1.18.4"
+            otp: "26"
+          - elixir: "1.18.4"
+            otp: "27"
+          - elixir: "1.18.4"
+            otp: "28"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
+      - name: Generated code matches the OpenAPI snapshot
+        run: elixir scripts/generate.exs --check
+      - name: Formatted
+        run: mix format --check-formatted
+      - name: Compiles without warnings
+        run: mix compile --warnings-as-errors
+      - name: Tests
+        run: mix test --warnings-as-errors
+
+  package:
+    name: Package
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18.4"
+          otp-version: "28"
+      - run: mix hex.build

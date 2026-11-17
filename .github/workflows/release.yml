@@ -1,0 +1,40 @@
+name: release
+
+# Publishes the billionsend package to Hex at the version mix.exs declares.
+# Run it by hand (Actions → release → Run workflow) on a version tag; it reads
+# HEX_API_KEY from the `hex` environment. See "Releasing" in the README.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    environment: hex
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18.4"
+          otp-version: "28"
+      # Only a tag that names the package's version publishes, so the number on
+      # Hex always matches a commit of this repository.
+      - name: The ref is the version tag
+        run: |
+          version=$(elixir -e 'Mix.start(); Code.require_file("mix.exs"); IO.write(BillionSend.MixProject.project()[:version])')
+          if [ "$GITHUB_REF" != "refs/tags/v$version" ]; then
+            echo "Run this workflow on the tag v$version (got $GITHUB_REF)" >&2
+            exit 1
+          fi
+      - name: Checks
+        run: |
+          elixir scripts/generate.exs --check
+          mix format --check-formatted
+          mix compile --warnings-as-errors
+          mix test --warnings-as-errors
+      - name: Publish
+        env:
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+        run: mix hex.publish package --yes
