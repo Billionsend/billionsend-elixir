@@ -5,29 +5,6 @@ defmodule BillionSend.Agent do
   Operations on agent.
   """
   @doc """
-  Get the account's claim status.
-
-  BillionSend extension. Whether the account behind the key is still unclaimed, when it deletes itself, and what it may do meanwhile. Any key may ask; an account a person has claimed answers `claimed` with no limits.
-
-  `GET /agent/status`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec status(BillionSend.Client.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def status(client, opts \\ []) do
-    BillionSend.Client.call(client, "GET", "/agent/status", opts, [])
-  end
-
-  @doc "Like `status/2`, but returns the answer or raises."
-  @spec status!(BillionSend.Client.t(), keyword()) :: term()
-  def status!(client, opts \\ []) do
-    BillionSend.Client.unwrap!(status(client, opts))
-  end
-
-  @doc """
   Send the claim link again.
 
   BillionSend extension. Sends the claim link to the address given at signup again; the earlier link stops working. At most 5 claim emails in all, ten minutes apart.
@@ -71,6 +48,29 @@ defmodule BillionSend.Agent do
   @spec signup!(BillionSend.Client.t(), map() | list() | nil, keyword()) :: term()
   def signup!(client, params, opts \\ []) do
     BillionSend.Client.unwrap!(signup(client, params, opts))
+  end
+
+  @doc """
+  Get the account's claim status.
+
+  BillionSend extension. Whether the account behind the key is still unclaimed, when it deletes itself, and what it may do meanwhile. Any key may ask; an account a person has claimed answers `claimed` with no limits.
+
+  `GET /agent/status`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec status(BillionSend.Client.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def status(client, opts \\ []) do
+    BillionSend.Client.call(client, "GET", "/agent/status", opts, [])
+  end
+
+  @doc "Like `status/2`, but returns the answer or raises."
+  @spec status!(BillionSend.Client.t(), keyword()) :: term()
+  def status!(client, opts \\ []) do
+    BillionSend.Client.unwrap!(status(client, opts))
   end
 end
 
@@ -184,31 +184,30 @@ defmodule BillionSend.Audiences.Contacts do
   Operations on audiences contacts.
   """
   @doc """
-  Delete a contact.
+  Create a contact.
 
-  `DELETE /audiences/{audienceId}/contacts/{id}`
+  `POST /audiences/{audienceId}/contacts`
 
   Options:
 
-    * `:erase` - query `erase`
     * `:extra_headers`, `:timeout`
   """
-  @spec delete(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
+  @spec create(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
           {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def delete(client, audience_id, id, opts \\ []) do
+  def create(client, audience_id, params, opts \\ []) do
     BillionSend.Client.call(
       client,
-      "DELETE",
-      "/audiences/#{BillionSend.Client.encode_path(audience_id)}/contacts/#{BillionSend.Client.encode_path(id)}",
+      "POST",
+      "/audiences/#{BillionSend.Client.encode_path(audience_id)}/contacts",
       opts,
-      query: [{"erase", :erase}]
+      body: params
     )
   end
 
-  @doc "Like `delete/4`, but returns the answer or raises."
-  @spec delete!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
-  def delete!(client, audience_id, id, opts \\ []) do
-    BillionSend.Client.unwrap!(delete(client, audience_id, id, opts))
+  @doc "Like `create/4`, but returns the answer or raises."
+  @spec create!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
+  def create!(client, audience_id, params, opts \\ []) do
+    BillionSend.Client.unwrap!(create(client, audience_id, params, opts))
   end
 
   @doc """
@@ -269,30 +268,31 @@ defmodule BillionSend.Audiences.Contacts do
   end
 
   @doc """
-  Create a contact.
+  Delete a contact.
 
-  `POST /audiences/{audienceId}/contacts`
+  `DELETE /audiences/{audienceId}/contacts/{id}`
 
   Options:
 
+    * `:erase` - query `erase`
     * `:extra_headers`, `:timeout`
   """
-  @spec create(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
+  @spec delete(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
           {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def create(client, audience_id, params, opts \\ []) do
+  def delete(client, audience_id, id, opts \\ []) do
     BillionSend.Client.call(
       client,
-      "POST",
-      "/audiences/#{BillionSend.Client.encode_path(audience_id)}/contacts",
+      "DELETE",
+      "/audiences/#{BillionSend.Client.encode_path(audience_id)}/contacts/#{BillionSend.Client.encode_path(id)}",
       opts,
-      body: params
+      query: [{"erase", :erase}]
     )
   end
 
-  @doc "Like `create/4`, but returns the answer or raises."
-  @spec create!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
-  def create!(client, audience_id, params, opts \\ []) do
-    BillionSend.Client.unwrap!(create(client, audience_id, params, opts))
+  @doc "Like `delete/4`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
+  def delete!(client, audience_id, id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, audience_id, id, opts))
   end
 end
 
@@ -300,62 +300,6 @@ defmodule BillionSend.Broadcasts do
   @moduledoc """
   Operations on broadcasts.
   """
-  @doc """
-  Send a broadcast.
-
-  `POST /broadcasts/{id}/send`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec send(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def send(client, id, params \\ nil, opts \\ []) do
-    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
-
-    BillionSend.Client.call(
-      client,
-      "POST",
-      "/broadcasts/#{BillionSend.Client.encode_path(id)}/send",
-      opts,
-      body: params
-    )
-  end
-
-  @doc "Like `send/4`, but returns the answer or raises."
-  @spec send!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
-  def send!(client, id, params \\ nil, opts \\ []) do
-    BillionSend.Client.unwrap!(send(client, id, params, opts))
-  end
-
-  @doc """
-  Cancel a broadcast.
-
-  `POST /broadcasts/{id}/cancel`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec cancel(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def cancel(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "POST",
-      "/broadcasts/#{BillionSend.Client.encode_path(id)}/cancel",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `cancel/3`, but returns the answer or raises."
-  @spec cancel!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def cancel!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(cancel(client, id, opts))
-  end
-
   @doc """
   List broadcasts.
 
@@ -422,33 +366,6 @@ defmodule BillionSend.Broadcasts do
   end
 
   @doc """
-  Delete a broadcast.
-
-  `DELETE /broadcasts/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def delete(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "DELETE",
-      "/broadcasts/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `delete/3`, but returns the answer or raises."
-  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def delete!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(delete(client, id, opts))
-  end
-
-  @doc """
   Retrieve a broadcast.
 
   `GET /broadcasts/{id}`
@@ -505,6 +422,60 @@ defmodule BillionSend.Broadcasts do
   end
 
   @doc """
+  Delete a broadcast.
+
+  `DELETE /broadcasts/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def delete(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/broadcasts/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `delete/3`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def delete!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, id, opts))
+  end
+
+  @doc """
+  Cancel a broadcast.
+
+  `POST /broadcasts/{id}/cancel`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec cancel(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def cancel(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "POST",
+      "/broadcasts/#{BillionSend.Client.encode_path(id)}/cancel",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `cancel/3`, but returns the answer or raises."
+  @spec cancel!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def cancel!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(cancel(client, id, opts))
+  end
+
+  @doc """
   Duplicate a broadcast.
 
   Copy any broadcast, whatever its status, into a new draft named "<name> (copy)": audience, sender, subject, reply-to, preview text and content come along; schedule, send times and counts do not.
@@ -532,95 +503,41 @@ defmodule BillionSend.Broadcasts do
   def duplicate!(client, id, opts \\ []) do
     BillionSend.Client.unwrap!(duplicate(client, id, opts))
   end
+
+  @doc """
+  Send a broadcast.
+
+  `POST /broadcasts/{id}/send`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec send(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def send(client, id, params \\ nil, opts \\ []) do
+    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
+
+    BillionSend.Client.call(
+      client,
+      "POST",
+      "/broadcasts/#{BillionSend.Client.encode_path(id)}/send",
+      opts,
+      body: params
+    )
+  end
+
+  @doc "Like `send/4`, but returns the answer or raises."
+  @spec send!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
+  def send!(client, id, params \\ nil, opts \\ []) do
+    BillionSend.Client.unwrap!(send(client, id, params, opts))
+  end
 end
 
 defmodule BillionSend.ContactProperties do
   @moduledoc """
   Operations on contact properties.
   """
-  @doc """
-  Delete a property.
-
-  `DELETE /contact-properties/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def delete(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "DELETE",
-      "/contact-properties/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `delete/3`, but returns the answer or raises."
-  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def delete!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(delete(client, id, opts))
-  end
-
-  @doc """
-  Retrieve a property.
-
-  `GET /contact-properties/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec get(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def get(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "GET",
-      "/contact-properties/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `get/3`, but returns the answer or raises."
-  @spec get!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def get!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(get(client, id, opts))
-  end
-
-  @doc """
-  Update a property.
-
-  `PATCH /contact-properties/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec update(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def update(client, id, params \\ nil, opts \\ []) do
-    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
-
-    BillionSend.Client.call(
-      client,
-      "PATCH",
-      "/contact-properties/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      body: params
-    )
-  end
-
-  @doc "Like `update/4`, but returns the answer or raises."
-  @spec update!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
-  def update!(client, id, params \\ nil, opts \\ []) do
-    BillionSend.Client.unwrap!(update(client, id, params, opts))
-  end
-
   @doc """
   List properties.
 
@@ -684,6 +601,89 @@ defmodule BillionSend.ContactProperties do
   @spec create!(BillionSend.Client.t(), map() | list() | nil, keyword()) :: term()
   def create!(client, params, opts \\ []) do
     BillionSend.Client.unwrap!(create(client, params, opts))
+  end
+
+  @doc """
+  Retrieve a property.
+
+  `GET /contact-properties/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec get(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def get(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "GET",
+      "/contact-properties/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `get/3`, but returns the answer or raises."
+  @spec get!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def get!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(get(client, id, opts))
+  end
+
+  @doc """
+  Update a property.
+
+  `PATCH /contact-properties/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec update(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def update(client, id, params \\ nil, opts \\ []) do
+    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
+
+    BillionSend.Client.call(
+      client,
+      "PATCH",
+      "/contact-properties/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      body: params
+    )
+  end
+
+  @doc "Like `update/4`, but returns the answer or raises."
+  @spec update!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
+  def update!(client, id, params \\ nil, opts \\ []) do
+    BillionSend.Client.unwrap!(update(client, id, params, opts))
+  end
+
+  @doc """
+  Delete a property.
+
+  `DELETE /contact-properties/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def delete(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/contact-properties/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `delete/3`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def delete!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, id, opts))
   end
 end
 
@@ -758,36 +758,6 @@ defmodule BillionSend.Contacts do
   end
 
   @doc """
-  Delete a contact.
-
-  Deletes the contact and its segment memberships. Its emails stay in the log; pass `erase=true` to also scrub the address from email history, event payloads and API logs.
-
-  `DELETE /contacts/{id}`
-
-  Options:
-
-    * `:erase` - query `erase`
-    * `:extra_headers`, `:timeout`
-  """
-  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def delete(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "DELETE",
-      "/contacts/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      query: [{"erase", :erase}]
-    )
-  end
-
-  @doc "Like `delete/3`, but returns the answer or raises."
-  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def delete!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(delete(client, id, opts))
-  end
-
-  @doc """
   Retrieve a contact.
 
   `GET /contacts/{id}`
@@ -841,6 +811,36 @@ defmodule BillionSend.Contacts do
   @spec update!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
   def update!(client, id, params \\ nil, opts \\ []) do
     BillionSend.Client.unwrap!(update(client, id, params, opts))
+  end
+
+  @doc """
+  Delete a contact.
+
+  Deletes the contact and its segment memberships. Its emails stay in the log; pass `erase=true` to also scrub the address from email history, event payloads and API logs.
+
+  `DELETE /contacts/{id}`
+
+  Options:
+
+    * `:erase` - query `erase`
+    * `:extra_headers`, `:timeout`
+  """
+  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def delete(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/contacts/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      query: [{"erase", :erase}]
+    )
+  end
+
+  @doc "Like `delete/3`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def delete!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, id, opts))
   end
 
   @doc """
@@ -958,33 +958,6 @@ defmodule BillionSend.Contacts.Segments do
   Operations on contacts segments.
   """
   @doc """
-  Leave a segment.
-
-  `DELETE /contacts/{id}/segments/{segmentId}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec remove(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def remove(client, id, segment_id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "DELETE",
-      "/contacts/#{BillionSend.Client.encode_path(id)}/segments/#{BillionSend.Client.encode_path(segment_id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `remove/4`, but returns the answer or raises."
-  @spec remove!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
-  def remove!(client, id, segment_id, opts \\ []) do
-    BillionSend.Client.unwrap!(remove(client, id, segment_id, opts))
-  end
-
-  @doc """
   Add to a segment.
 
   `POST /contacts/{id}/segments/{segmentId}`
@@ -1009,6 +982,33 @@ defmodule BillionSend.Contacts.Segments do
   @spec add!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
   def add!(client, id, segment_id, opts \\ []) do
     BillionSend.Client.unwrap!(add(client, id, segment_id, opts))
+  end
+
+  @doc """
+  Leave a segment.
+
+  `DELETE /contacts/{id}/segments/{segmentId}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec remove(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def remove(client, id, segment_id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/contacts/#{BillionSend.Client.encode_path(id)}/segments/#{BillionSend.Client.encode_path(segment_id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `remove/4`, but returns the answer or raises."
+  @spec remove!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
+  def remove!(client, id, segment_id, opts \\ []) do
+    BillionSend.Client.unwrap!(remove(client, id, segment_id, opts))
   end
 end
 
@@ -1101,112 +1101,6 @@ defmodule BillionSend.Domains do
   Operations on domains.
   """
   @doc """
-  Verify a domain.
-
-  `POST /domains/{id}/verify`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec verify(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def verify(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "POST",
-      "/domains/#{BillionSend.Client.encode_path(id)}/verify",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `verify/3`, but returns the answer or raises."
-  @spec verify!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def verify!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(verify(client, id, opts))
-  end
-
-  @doc """
-  Delete a domain.
-
-  `DELETE /domains/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def delete(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "DELETE",
-      "/domains/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `delete/3`, but returns the answer or raises."
-  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def delete!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(delete(client, id, opts))
-  end
-
-  @doc """
-  Retrieve a domain.
-
-  `GET /domains/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec get(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def get(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "GET",
-      "/domains/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `get/3`, but returns the answer or raises."
-  @spec get!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def get!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(get(client, id, opts))
-  end
-
-  @doc """
-  Update a domain.
-
-  `PATCH /domains/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec update(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def update(client, id, params \\ nil, opts \\ []) do
-    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
-
-    BillionSend.Client.call(client, "PATCH", "/domains/#{BillionSend.Client.encode_path(id)}", opts,
-      body: params
-    )
-  end
-
-  @doc "Like `update/4`, but returns the answer or raises."
-  @spec update!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
-  def update!(client, id, params \\ nil, opts \\ []) do
-    BillionSend.Client.unwrap!(update(client, id, params, opts))
-  end
-
-  @doc """
   List domains.
 
   Newest first, with cursor pagination: `after` takes the last id of a page and pages toward older items, `before` takes the first id and pages back toward newer ones. The team's subdomain of the shared domain, when it has one, is the last row (`shared: true`).
@@ -1270,114 +1164,11 @@ defmodule BillionSend.Domains do
   def create!(client, params, opts \\ []) do
     BillionSend.Client.unwrap!(create(client, params, opts))
   end
-end
-
-defmodule BillionSend.Emails do
-  @moduledoc """
-  Operations on emails. See also `BillionSend.Emails.Metrics`, `BillionSend.Emails.Receiving`.
-  """
-  import Kernel, except: [send: 2]
 
   @doc """
-  Get email metrics.
+  Retrieve a domain.
 
-  `GET /emails/metrics`
-
-  Options:
-
-    * `:start_date` - query `start_date`
-    * `:end_date` - query `end_date`
-    * `:timezone` - query `timezone`
-    * `:granularity` - query `granularity`
-    * `:metrics` - query `metrics`
-    * `:dimensions` - query `dimensions`
-    * `:domain_id` - query `domain_id`
-    * `:email_id` - query `email_id`
-    * `:broadcast_id` - query `broadcast_id`
-    * `:extra_headers`, `:timeout`
-  """
-  @spec metrics(BillionSend.Client.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def metrics(client, opts \\ []) do
-    BillionSend.Client.call(client, "GET", "/emails/metrics", opts,
-      query: [
-        {"start_date", :start_date},
-        {"end_date", :end_date},
-        {"timezone", :timezone},
-        {"granularity", :granularity},
-        {"metrics", :metrics},
-        {"dimensions", :dimensions},
-        {"domain_id", :domain_id},
-        {"email_id", :email_id},
-        {"broadcast_id", :broadcast_id}
-      ]
-    )
-  end
-
-  @doc "Like `metrics/2`, but returns the answer or raises."
-  @spec metrics!(BillionSend.Client.t(), keyword()) :: term()
-  def metrics!(client, opts \\ []) do
-    BillionSend.Client.unwrap!(metrics(client, opts))
-  end
-
-  @doc """
-  Get email insights.
-
-  `GET /emails/{id}/insights`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec insights(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def insights(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "GET",
-      "/emails/#{BillionSend.Client.encode_path(id)}/insights",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `insights/3`, but returns the answer or raises."
-  @spec insights!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def insights!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(insights(client, id, opts))
-  end
-
-  @doc """
-  Delete an email.
-
-  `DELETE /emails/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def delete(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "DELETE",
-      "/emails/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `delete/3`, but returns the answer or raises."
-  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def delete!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(delete(client, id, opts))
-  end
-
-  @doc """
-  Retrieve an email.
-
-  `GET /emails/{id}`
+  `GET /domains/{id}`
 
   Options:
 
@@ -1389,7 +1180,7 @@ defmodule BillionSend.Emails do
     BillionSend.Client.call(
       client,
       "GET",
-      "/emails/#{BillionSend.Client.encode_path(id)}",
+      "/domains/#{BillionSend.Client.encode_path(id)}",
       opts,
       []
     )
@@ -1402,9 +1193,9 @@ defmodule BillionSend.Emails do
   end
 
   @doc """
-  Update an email.
+  Update a domain.
 
-  `PATCH /emails/{id}`
+  `PATCH /domains/{id}`
 
   Options:
 
@@ -1412,47 +1203,80 @@ defmodule BillionSend.Emails do
   """
   @spec update(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
           {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def update(client, id, params, opts \\ []) do
-    BillionSend.Client.call(client, "PATCH", "/emails/#{BillionSend.Client.encode_path(id)}", opts,
+  def update(client, id, params \\ nil, opts \\ []) do
+    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
+
+    BillionSend.Client.call(client, "PATCH", "/domains/#{BillionSend.Client.encode_path(id)}", opts,
       body: params
     )
   end
 
   @doc "Like `update/4`, but returns the answer or raises."
   @spec update!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
-  def update!(client, id, params, opts \\ []) do
+  def update!(client, id, params \\ nil, opts \\ []) do
     BillionSend.Client.unwrap!(update(client, id, params, opts))
   end
 
   @doc """
-  Send a batch of emails.
+  Delete a domain.
 
-  Sent with an Idempotency-Key: `:idempotency_key` when given, else one made up for this call, so that its retries never send twice.
-
-  `POST /emails/batch`
+  `DELETE /domains/{id}`
 
   Options:
 
-    * `:batch_validation` - header `x-batch-validation`
-    * `:idempotency_key` - see "Sending once" in the README
     * `:extra_headers`, `:timeout`
   """
-  @spec batch(BillionSend.Client.t(), map() | list() | nil, keyword()) ::
+  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
           {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def batch(client, params, opts \\ []) do
-    BillionSend.Client.call(client, "POST", "/emails/batch", opts,
-      headers: [{"x-batch-validation", :batch_validation}],
-      body: params,
-      idempotent: true,
-      extra: [:idempotency_key]
+  def delete(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/domains/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
     )
   end
 
-  @doc "Like `batch/3`, but returns the answer or raises."
-  @spec batch!(BillionSend.Client.t(), map() | list() | nil, keyword()) :: term()
-  def batch!(client, params, opts \\ []) do
-    BillionSend.Client.unwrap!(batch(client, params, opts))
+  @doc "Like `delete/3`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def delete!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, id, opts))
   end
+
+  @doc """
+  Verify a domain.
+
+  `POST /domains/{id}/verify`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec verify(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def verify(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "POST",
+      "/domains/#{BillionSend.Client.encode_path(id)}/verify",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `verify/3`, but returns the answer or raises."
+  @spec verify!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def verify!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(verify(client, id, opts))
+  end
+end
+
+defmodule BillionSend.Emails do
+  @moduledoc """
+  Operations on emails. See also `BillionSend.Emails.Metrics`, `BillionSend.Emails.Receiving`.
+  """
+  import Kernel, except: [send: 2]
 
   @doc """
   List emails.
@@ -1527,6 +1351,155 @@ defmodule BillionSend.Emails do
   end
 
   @doc """
+  Send a batch of emails.
+
+  Sent with an Idempotency-Key: `:idempotency_key` when given, else one made up for this call, so that its retries never send twice.
+
+  `POST /emails/batch`
+
+  Options:
+
+    * `:batch_validation` - header `x-batch-validation`
+    * `:idempotency_key` - see "Sending once" in the README
+    * `:extra_headers`, `:timeout`
+  """
+  @spec batch(BillionSend.Client.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def batch(client, params, opts \\ []) do
+    BillionSend.Client.call(client, "POST", "/emails/batch", opts,
+      headers: [{"x-batch-validation", :batch_validation}],
+      body: params,
+      idempotent: true,
+      extra: [:idempotency_key]
+    )
+  end
+
+  @doc "Like `batch/3`, but returns the answer or raises."
+  @spec batch!(BillionSend.Client.t(), map() | list() | nil, keyword()) :: term()
+  def batch!(client, params, opts \\ []) do
+    BillionSend.Client.unwrap!(batch(client, params, opts))
+  end
+
+  @doc """
+  Get email metrics.
+
+  `GET /emails/metrics`
+
+  Options:
+
+    * `:start_date` - query `start_date`
+    * `:end_date` - query `end_date`
+    * `:timezone` - query `timezone`
+    * `:granularity` - query `granularity`
+    * `:metrics` - query `metrics`
+    * `:dimensions` - query `dimensions`
+    * `:domain_id` - query `domain_id`
+    * `:email_id` - query `email_id`
+    * `:broadcast_id` - query `broadcast_id`
+    * `:extra_headers`, `:timeout`
+  """
+  @spec metrics(BillionSend.Client.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def metrics(client, opts \\ []) do
+    BillionSend.Client.call(client, "GET", "/emails/metrics", opts,
+      query: [
+        {"start_date", :start_date},
+        {"end_date", :end_date},
+        {"timezone", :timezone},
+        {"granularity", :granularity},
+        {"metrics", :metrics},
+        {"dimensions", :dimensions},
+        {"domain_id", :domain_id},
+        {"email_id", :email_id},
+        {"broadcast_id", :broadcast_id}
+      ]
+    )
+  end
+
+  @doc "Like `metrics/2`, but returns the answer or raises."
+  @spec metrics!(BillionSend.Client.t(), keyword()) :: term()
+  def metrics!(client, opts \\ []) do
+    BillionSend.Client.unwrap!(metrics(client, opts))
+  end
+
+  @doc """
+  Retrieve an email.
+
+  `GET /emails/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec get(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def get(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "GET",
+      "/emails/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `get/3`, but returns the answer or raises."
+  @spec get!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def get!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(get(client, id, opts))
+  end
+
+  @doc """
+  Update an email.
+
+  `PATCH /emails/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec update(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def update(client, id, params, opts \\ []) do
+    BillionSend.Client.call(client, "PATCH", "/emails/#{BillionSend.Client.encode_path(id)}", opts,
+      body: params
+    )
+  end
+
+  @doc "Like `update/4`, but returns the answer or raises."
+  @spec update!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
+  def update!(client, id, params, opts \\ []) do
+    BillionSend.Client.unwrap!(update(client, id, params, opts))
+  end
+
+  @doc """
+  Delete an email.
+
+  `DELETE /emails/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def delete(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/emails/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `delete/3`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def delete!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, id, opts))
+  end
+
+  @doc """
   Cancel an email.
 
   `POST /emails/{id}/cancel`
@@ -1552,6 +1525,33 @@ defmodule BillionSend.Emails do
   def cancel!(client, id, opts \\ []) do
     BillionSend.Client.unwrap!(cancel(client, id, opts))
   end
+
+  @doc """
+  Get email insights.
+
+  `GET /emails/{id}/insights`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec insights(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def insights(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "GET",
+      "/emails/#{BillionSend.Client.encode_path(id)}/insights",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `insights/3`, but returns the answer or raises."
+  @spec insights!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def insights!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(insights(client, id, opts))
+  end
 end
 
 defmodule BillionSend.Emails.Metrics do
@@ -1559,9 +1559,9 @@ defmodule BillionSend.Emails.Metrics do
   Operations on emails metrics.
   """
   @doc """
-  Get clicks by link.
+  Get opens by mail client.
 
-  `GET /emails/metrics/links`
+  `GET /emails/metrics/clients`
 
   Options:
 
@@ -1569,26 +1569,25 @@ defmodule BillionSend.Emails.Metrics do
     * `:end_date` - query `end_date`
     * `:domain_id` - query `domain_id`
     * `:broadcast_id` - query `broadcast_id`
-    * `:limit` - query `limit`
     * `:extra_headers`, `:timeout`
   """
-  @spec links(BillionSend.Client.t(), keyword()) :: {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def links(client, opts \\ []) do
-    BillionSend.Client.call(client, "GET", "/emails/metrics/links", opts,
+  @spec clients(BillionSend.Client.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def clients(client, opts \\ []) do
+    BillionSend.Client.call(client, "GET", "/emails/metrics/clients", opts,
       query: [
         {"start_date", :start_date},
         {"end_date", :end_date},
         {"domain_id", :domain_id},
-        {"broadcast_id", :broadcast_id},
-        {"limit", :limit}
+        {"broadcast_id", :broadcast_id}
       ]
     )
   end
 
-  @doc "Like `links/2`, but returns the answer or raises."
-  @spec links!(BillionSend.Client.t(), keyword()) :: term()
-  def links!(client, opts \\ []) do
-    BillionSend.Client.unwrap!(links(client, opts))
+  @doc "Like `clients/2`, but returns the answer or raises."
+  @spec clients!(BillionSend.Client.t(), keyword()) :: term()
+  def clients!(client, opts \\ []) do
+    BillionSend.Client.unwrap!(clients(client, opts))
   end
 
   @doc """
@@ -1624,9 +1623,9 @@ defmodule BillionSend.Emails.Metrics do
   end
 
   @doc """
-  Get opens by mail client.
+  Get clicks by link.
 
-  `GET /emails/metrics/clients`
+  `GET /emails/metrics/links`
 
   Options:
 
@@ -1634,25 +1633,26 @@ defmodule BillionSend.Emails.Metrics do
     * `:end_date` - query `end_date`
     * `:domain_id` - query `domain_id`
     * `:broadcast_id` - query `broadcast_id`
+    * `:limit` - query `limit`
     * `:extra_headers`, `:timeout`
   """
-  @spec clients(BillionSend.Client.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def clients(client, opts \\ []) do
-    BillionSend.Client.call(client, "GET", "/emails/metrics/clients", opts,
+  @spec links(BillionSend.Client.t(), keyword()) :: {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def links(client, opts \\ []) do
+    BillionSend.Client.call(client, "GET", "/emails/metrics/links", opts,
       query: [
         {"start_date", :start_date},
         {"end_date", :end_date},
         {"domain_id", :domain_id},
-        {"broadcast_id", :broadcast_id}
+        {"broadcast_id", :broadcast_id},
+        {"limit", :limit}
       ]
     )
   end
 
-  @doc "Like `clients/2`, but returns the answer or raises."
-  @spec clients!(BillionSend.Client.t(), keyword()) :: term()
-  def clients!(client, opts \\ []) do
-    BillionSend.Client.unwrap!(clients(client, opts))
+  @doc "Like `links/2`, but returns the answer or raises."
+  @spec links!(BillionSend.Client.t(), keyword()) :: term()
+  def links!(client, opts \\ []) do
+    BillionSend.Client.unwrap!(links(client, opts))
   end
 end
 
@@ -1660,99 +1660,6 @@ defmodule BillionSend.Emails.Receiving do
   @moduledoc """
   Operations on emails receiving. See also `BillionSend.Emails.Receiving.Attachments`.
   """
-  @doc """
-  Delete a received email.
-
-  BillionSend extension: erases one received email now, its sealed content, inbox memberships and received secrets with it, and threads it leaves empty. Needs a full access key that is not scoped to an inbox; for an MCP token, the owner or admin role. Webhook payloads already sent keep their metadata until the payload retention strips them.
-
-  `DELETE /emails/receiving/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def delete(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "DELETE",
-      "/emails/receiving/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `delete/3`, but returns the answer or raises."
-  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def delete!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(delete(client, id, opts))
-  end
-
-  @doc """
-  Get a received email.
-
-  One received email with its html, text, headers, authentication results and a signed link to the original message, plus BillionSend's screening, verdicts, the extracted read and, where allowed, its verification code or sign-in link. Needs a full access key. An inbox-scoped key or an MCP token gets 403 email_quarantined for held mail, and 404 while it is being screened. Everything in a received email was written by whoever sent it, so its HTML is safe to show only in a sandbox.
-
-  `GET /emails/receiving/{id}`
-
-  Options:
-
-    * `:html_format` - query `html_format`
-    * `:extra_headers`, `:timeout`
-  """
-  @spec get(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def get(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "GET",
-      "/emails/receiving/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      query: [{"html_format", :html_format}]
-    )
-  end
-
-  @doc "Like `get/3`, but returns the answer or raises."
-  @spec get!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def get!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(get(client, id, opts))
-  end
-
-  @doc """
-  Forward an email.
-
-  BillionSend extension: forwards server-side, inline under a note (default) or with the original attached as forwarded_message.eml (`mode: attachment`), within 10 MiB. An email that carries malware is never forwarded. Sender rules and the 202 draft answer are those of the reply. Accepts an `Idempotency-Key`. Needs a full access key.
-
-  Sent with an Idempotency-Key: `:idempotency_key` when given, else one made up for this call, so that its retries never send twice.
-
-  `POST /emails/receiving/{id}/forward`
-
-  Options:
-
-    * `:idempotency_key` - see "Sending once" in the README
-    * `:extra_headers`, `:timeout`
-  """
-  @spec forward(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def forward(client, id, params, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "POST",
-      "/emails/receiving/#{BillionSend.Client.encode_path(id)}/forward",
-      opts,
-      body: params,
-      idempotent: true,
-      extra: [:idempotency_key]
-    )
-  end
-
-  @doc "Like `forward/4`, but returns the answer or raises."
-  @spec forward!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
-  def forward!(client, id, params, opts \\ []) do
-    BillionSend.Client.unwrap!(forward(client, id, params, opts))
-  end
-
   @doc """
   List received emails.
 
@@ -1820,6 +1727,99 @@ defmodule BillionSend.Emails.Receiving do
   end
 
   @doc """
+  Get a received email.
+
+  One received email with its html, text, headers, authentication results and a signed link to the original message, plus BillionSend's screening, verdicts, the extracted read and, where allowed, its verification code or sign-in link. Needs a full access key. An inbox-scoped key or an MCP token gets 403 email_quarantined for held mail, and 404 while it is being screened. Everything in a received email was written by whoever sent it, so its HTML is safe to show only in a sandbox.
+
+  `GET /emails/receiving/{id}`
+
+  Options:
+
+    * `:html_format` - query `html_format`
+    * `:extra_headers`, `:timeout`
+  """
+  @spec get(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def get(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "GET",
+      "/emails/receiving/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      query: [{"html_format", :html_format}]
+    )
+  end
+
+  @doc "Like `get/3`, but returns the answer or raises."
+  @spec get!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def get!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(get(client, id, opts))
+  end
+
+  @doc """
+  Delete a received email.
+
+  BillionSend extension: erases one received email now, its sealed content, inbox memberships and received secrets with it, and threads it leaves empty. Needs a full access key that is not scoped to an inbox; for an MCP token, the owner or admin role. Webhook payloads already sent keep their metadata until the payload retention strips them.
+
+  `DELETE /emails/receiving/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def delete(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/emails/receiving/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `delete/3`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def delete!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, id, opts))
+  end
+
+  @doc """
+  Forward an email.
+
+  BillionSend extension: forwards server-side, inline under a note (default) or with the original attached as forwarded_message.eml (`mode: attachment`), within 10 MiB. An email that carries malware is never forwarded. Sender rules and the 202 draft answer are those of the reply. Accepts an `Idempotency-Key`. Needs a full access key.
+
+  Sent with an Idempotency-Key: `:idempotency_key` when given, else one made up for this call, so that its retries never send twice.
+
+  `POST /emails/receiving/{id}/forward`
+
+  Options:
+
+    * `:idempotency_key` - see "Sending once" in the README
+    * `:extra_headers`, `:timeout`
+  """
+  @spec forward(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def forward(client, id, params, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "POST",
+      "/emails/receiving/#{BillionSend.Client.encode_path(id)}/forward",
+      opts,
+      body: params,
+      idempotent: true,
+      extra: [:idempotency_key]
+    )
+  end
+
+  @doc "Like `forward/4`, but returns the answer or raises."
+  @spec forward!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
+  def forward!(client, id, params, opts \\ []) do
+    BillionSend.Client.unwrap!(forward(client, id, params, opts))
+  end
+
+  @doc """
   Reply to an email.
 
   BillionSend extension: replies server-side, threaded with In-Reply-To and References. It goes out from the inbox the email reached (`inbox_id` picks one), else from the first address it was received for, or from `from`. A reply from an inbox runs its rules and may be held as a draft (202). Accepts an `Idempotency-Key`. Needs a full access key.
@@ -1860,35 +1860,6 @@ defmodule BillionSend.Emails.Receiving.Attachments do
   @moduledoc """
   Operations on emails receiving attachments.
   """
-  @doc """
-  Get an attachment.
-
-  One attachment's metadata and a signed download link valid for one hour. Needs a full access key.
-
-  `GET /emails/receiving/{email_id}/attachments/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec get(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def get(client, email_id, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "GET",
-      "/emails/receiving/#{BillionSend.Client.encode_path(email_id)}/attachments/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `get/4`, but returns the answer or raises."
-  @spec get!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
-  def get!(client, email_id, id, opts \\ []) do
-    BillionSend.Client.unwrap!(get(client, email_id, id, opts))
-  end
-
   @doc """
   List attachments.
 
@@ -1939,6 +1910,35 @@ defmodule BillionSend.Emails.Receiving.Attachments do
   end
 
   @doc """
+  Get an attachment.
+
+  One attachment's metadata and a signed download link valid for one hour. Needs a full access key.
+
+  `GET /emails/receiving/{email_id}/attachments/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec get(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def get(client, email_id, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "GET",
+      "/emails/receiving/#{BillionSend.Client.encode_path(email_id)}/attachments/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `get/4`, but returns the answer or raises."
+  @spec get!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
+  def get!(client, email_id, id, opts \\ []) do
+    BillionSend.Client.unwrap!(get(client, email_id, id, opts))
+  end
+
+  @doc """
   Get an attachment's text.
 
   The text of a PDF, Word (.docx) or Excel (.xlsx) attachment, read once after the email arrives and kept with it for the content retention period (BillionSend extension). Until the read has run the status is pending. Needs a full access key. An email that carries malware answers 410.
@@ -1972,40 +1972,6 @@ defmodule BillionSend.Inboxes do
   @moduledoc """
   Operations on inboxes. See also `BillionSend.Inboxes.Agent`, `BillionSend.Inboxes.Codes`, `BillionSend.Inboxes.Drafts`, `BillionSend.Inboxes.Events`, `BillionSend.Inboxes.Labels`, `BillionSend.Inboxes.Quarantine`, `BillionSend.Inboxes.Safety`, `BillionSend.Inboxes.Threads`.
   """
-  @doc """
-  Send an email from an inbox.
-
-  Sends a new conversation from the inbox address in one call (`to`, `subject`, `html` and/or `text`, optional `cc`, `bcc` and `attachments` as POST /emails takes them). It runs the same rules as a reply: an inbox that may not start conversations, a first-time recipient past the ramp, or `requires_approval: true` keeps it as a draft for a person to approve and the answer is 202 with the Draft. Accepts an `Idempotency-Key`. An inbox on the shared domain takes no attachments.
-
-  Sent with an Idempotency-Key: `:idempotency_key` when given, else one made up for this call, so that its retries never send twice.
-
-  `POST /inboxes/{inbox_id}/emails`
-
-  Options:
-
-    * `:idempotency_key` - see "Sending once" in the README
-    * `:extra_headers`, `:timeout`
-  """
-  @spec send(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def send(client, inbox_id, params, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "POST",
-      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/emails",
-      opts,
-      body: params,
-      idempotent: true,
-      extra: [:idempotency_key]
-    )
-  end
-
-  @doc "Like `send/4`, but returns the answer or raises."
-  @spec send!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
-  def send!(client, inbox_id, params, opts \\ []) do
-    BillionSend.Client.unwrap!(send(client, inbox_id, params, opts))
-  end
-
   @doc """
   List inboxes.
 
@@ -2076,35 +2042,6 @@ defmodule BillionSend.Inboxes do
   end
 
   @doc """
-  Delete an inbox.
-
-  Its threads, drafts, labels and the messages only it received go with it, and its address stops receiving. Its inbox-scoped API keys are revoked. Needs the owner, admin or developer role, or a full access team key.
-
-  `DELETE /inboxes/{inbox_id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def delete(client, inbox_id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "DELETE",
-      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `delete/3`, but returns the answer or raises."
-  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def delete!(client, inbox_id, opts \\ []) do
-    BillionSend.Client.unwrap!(delete(client, inbox_id, opts))
-  end
-
-  @doc """
   Retrieve an inbox.
 
   By id, or by its email address (case-insensitive). An expired inbox is not found.
@@ -2162,6 +2099,69 @@ defmodule BillionSend.Inboxes do
   @spec update!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
   def update!(client, inbox_id, params \\ nil, opts \\ []) do
     BillionSend.Client.unwrap!(update(client, inbox_id, params, opts))
+  end
+
+  @doc """
+  Delete an inbox.
+
+  Its threads, drafts, labels and the messages only it received go with it, and its address stops receiving. Its inbox-scoped API keys are revoked. Needs the owner, admin or developer role, or a full access team key.
+
+  `DELETE /inboxes/{inbox_id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def delete(client, inbox_id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `delete/3`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def delete!(client, inbox_id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, inbox_id, opts))
+  end
+
+  @doc """
+  Send an email from an inbox.
+
+  Sends a new conversation from the inbox address in one call (`to`, `subject`, `html` and/or `text`, optional `cc`, `bcc` and `attachments` as POST /emails takes them). It runs the same rules as a reply: an inbox that may not start conversations, a first-time recipient past the ramp, or `requires_approval: true` keeps it as a draft for a person to approve and the answer is 202 with the Draft. Accepts an `Idempotency-Key`. An inbox on the shared domain takes no attachments.
+
+  Sent with an Idempotency-Key: `:idempotency_key` when given, else one made up for this call, so that its retries never send twice.
+
+  `POST /inboxes/{inbox_id}/emails`
+
+  Options:
+
+    * `:idempotency_key` - see "Sending once" in the README
+    * `:extra_headers`, `:timeout`
+  """
+  @spec send(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def send(client, inbox_id, params, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "POST",
+      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/emails",
+      opts,
+      body: params,
+      idempotent: true,
+      extra: [:idempotency_key]
+    )
+  end
+
+  @doc "Like `send/4`, but returns the answer or raises."
+  @spec send!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
+  def send!(client, inbox_id, params, opts \\ []) do
+    BillionSend.Client.unwrap!(send(client, inbox_id, params, opts))
   end
 end
 
@@ -2241,133 +2241,6 @@ defmodule BillionSend.Inboxes.Drafts do
   @moduledoc """
   Operations on inboxes drafts.
   """
-  @doc """
-  Delete a draft.
-
-  Removes an unsent draft; a sent one answers 409.
-
-  `DELETE /inboxes/{inbox_id}/drafts/{draft_id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec delete(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def delete(client, inbox_id, draft_id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "DELETE",
-      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/drafts/#{BillionSend.Client.encode_path(draft_id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `delete/4`, but returns the answer or raises."
-  @spec delete!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
-  def delete!(client, inbox_id, draft_id, opts \\ []) do
-    BillionSend.Client.unwrap!(delete(client, inbox_id, draft_id, opts))
-  end
-
-  @doc """
-  Retrieve a draft.
-
-  One draft with its body, also after it was sent (status sent, email_id set).
-
-  `GET /inboxes/{inbox_id}/drafts/{draft_id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec get(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def get(client, inbox_id, draft_id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "GET",
-      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/drafts/#{BillionSend.Client.encode_path(draft_id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `get/4`, but returns the answer or raises."
-  @spec get!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
-  def get!(client, inbox_id, draft_id, opts \\ []) do
-    BillionSend.Client.unwrap!(get(client, inbox_id, draft_id, opts))
-  end
-
-  @doc """
-  Update a draft.
-
-  Each given field replaces the stored one; null clears it. Setting html or text replaces the whole body: the part left out becomes null. `attachments` replaces the whole list (null or an empty list removes the files). A sent draft, or one that changed during the request, answers 409. An edit by an agent sends a draft waiting for approval back to draft. `send_at` (BillionSend extension) schedules the draft to be sent as the caller, or reschedules it, and clears `send_error`; null cancels the schedule. A draft waiting for approval cannot be scheduled (409). When the scheduled send goes out, the draft becomes sent; when the inbox's rules hold it, pending_approval; when it is refused (the key revoked, the inbox deleted, a limit reached), it stays a draft with `send_at` null, `send_error` set and an `inbox.draft.send_failed` webhook.
-
-  `PATCH /inboxes/{inbox_id}/drafts/{draft_id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec update(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def update(client, inbox_id, draft_id, params \\ nil, opts \\ []) do
-    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
-
-    BillionSend.Client.call(
-      client,
-      "PATCH",
-      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/drafts/#{BillionSend.Client.encode_path(draft_id)}",
-      opts,
-      body: params
-    )
-  end
-
-  @doc "Like `update/5`, but returns the answer or raises."
-  @spec update!(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
-          term()
-  def update!(client, inbox_id, draft_id, params \\ nil, opts \\ []) do
-    BillionSend.Client.unwrap!(update(client, inbox_id, draft_id, params, opts))
-  end
-
-  @doc """
-  Send a draft.
-
-  Sends the draft from the inbox address; the body is optional and only ever holds `headers`, which are not supported yet (an empty value is fine), and an `Idempotency-Key` is accepted. Answers the sent email's id. A draft waiting for approval goes out only when a person or a team-wide full access key sends it (403 approval_required otherwise), and their send skips the inbox's rules but never the team's limits or the shared domain's rules. An agent's send of a draft runs the rules and may hold it (202).
-
-  Sent with an Idempotency-Key: `:idempotency_key` when given, else one made up for this call, so that its retries never send twice.
-
-  `POST /inboxes/{inbox_id}/drafts/{draft_id}/send`
-
-  Options:
-
-    * `:idempotency_key` - see "Sending once" in the README
-    * `:extra_headers`, `:timeout`
-  """
-  @spec send(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def send(client, inbox_id, draft_id, params \\ nil, opts \\ []) do
-    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
-
-    BillionSend.Client.call(
-      client,
-      "POST",
-      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/drafts/#{BillionSend.Client.encode_path(draft_id)}/send",
-      opts,
-      body: params,
-      idempotent: true,
-      extra: [:idempotency_key]
-    )
-  end
-
-  @doc "Like `send/5`, but returns the answer or raises."
-  @spec send!(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
-          term()
-  def send!(client, inbox_id, draft_id, params \\ nil, opts \\ []) do
-    BillionSend.Client.unwrap!(send(client, inbox_id, draft_id, params, opts))
-  end
-
   @doc """
   List drafts.
 
@@ -2449,6 +2322,96 @@ defmodule BillionSend.Inboxes.Drafts do
   end
 
   @doc """
+  Retrieve a draft.
+
+  One draft with its body, also after it was sent (status sent, email_id set).
+
+  `GET /inboxes/{inbox_id}/drafts/{draft_id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec get(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def get(client, inbox_id, draft_id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "GET",
+      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/drafts/#{BillionSend.Client.encode_path(draft_id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `get/4`, but returns the answer or raises."
+  @spec get!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
+  def get!(client, inbox_id, draft_id, opts \\ []) do
+    BillionSend.Client.unwrap!(get(client, inbox_id, draft_id, opts))
+  end
+
+  @doc """
+  Update a draft.
+
+  Each given field replaces the stored one; null clears it. Setting html or text replaces the whole body: the part left out becomes null. `attachments` replaces the whole list (null or an empty list removes the files). A sent draft, or one that changed during the request, answers 409. An edit by an agent sends a draft waiting for approval back to draft. `send_at` (BillionSend extension) schedules the draft to be sent as the caller, or reschedules it, and clears `send_error`; null cancels the schedule. A draft waiting for approval cannot be scheduled (409). When the scheduled send goes out, the draft becomes sent; when the inbox's rules hold it, pending_approval; when it is refused (the key revoked, the inbox deleted, a limit reached), it stays a draft with `send_at` null, `send_error` set and an `inbox.draft.send_failed` webhook.
+
+  `PATCH /inboxes/{inbox_id}/drafts/{draft_id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec update(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def update(client, inbox_id, draft_id, params \\ nil, opts \\ []) do
+    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
+
+    BillionSend.Client.call(
+      client,
+      "PATCH",
+      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/drafts/#{BillionSend.Client.encode_path(draft_id)}",
+      opts,
+      body: params
+    )
+  end
+
+  @doc "Like `update/5`, but returns the answer or raises."
+  @spec update!(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
+          term()
+  def update!(client, inbox_id, draft_id, params \\ nil, opts \\ []) do
+    BillionSend.Client.unwrap!(update(client, inbox_id, draft_id, params, opts))
+  end
+
+  @doc """
+  Delete a draft.
+
+  Removes an unsent draft; a sent one answers 409.
+
+  `DELETE /inboxes/{inbox_id}/drafts/{draft_id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec delete(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def delete(client, inbox_id, draft_id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/drafts/#{BillionSend.Client.encode_path(draft_id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `delete/4`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
+  def delete!(client, inbox_id, draft_id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, inbox_id, draft_id, opts))
+  end
+
+  @doc """
   Reject a draft.
 
   BillionSend extension: a person or a team-wide full access key turns down a draft waiting for approval. It stays readable with status rejected; webhooks report it deleted.
@@ -2475,6 +2438,43 @@ defmodule BillionSend.Inboxes.Drafts do
   @spec reject!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
   def reject!(client, inbox_id, draft_id, opts \\ []) do
     BillionSend.Client.unwrap!(reject(client, inbox_id, draft_id, opts))
+  end
+
+  @doc """
+  Send a draft.
+
+  Sends the draft from the inbox address; the body is optional and only ever holds `headers`, which are not supported yet (an empty value is fine), and an `Idempotency-Key` is accepted. Answers the sent email's id. A draft waiting for approval goes out only when a person or a team-wide full access key sends it (403 approval_required otherwise), and their send skips the inbox's rules but never the team's limits or the shared domain's rules. An agent's send of a draft runs the rules and may hold it (202).
+
+  Sent with an Idempotency-Key: `:idempotency_key` when given, else one made up for this call, so that its retries never send twice.
+
+  `POST /inboxes/{inbox_id}/drafts/{draft_id}/send`
+
+  Options:
+
+    * `:idempotency_key` - see "Sending once" in the README
+    * `:extra_headers`, `:timeout`
+  """
+  @spec send(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def send(client, inbox_id, draft_id, params \\ nil, opts \\ []) do
+    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
+
+    BillionSend.Client.call(
+      client,
+      "POST",
+      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/drafts/#{BillionSend.Client.encode_path(draft_id)}/send",
+      opts,
+      body: params,
+      idempotent: true,
+      extra: [:idempotency_key]
+    )
+  end
+
+  @doc "Like `send/5`, but returns the answer or raises."
+  @spec send!(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
+          term()
+  def send!(client, inbox_id, draft_id, params \\ nil, opts \\ []) do
+    BillionSend.Client.unwrap!(send(client, inbox_id, draft_id, params, opts))
   end
 end
 
@@ -2568,65 +2568,6 @@ defmodule BillionSend.Inboxes.Labels do
   Operations on inboxes labels.
   """
   @doc """
-  Delete a label.
-
-  Also takes it off every thread, with no per-thread event.
-
-  `DELETE /inboxes/{inbox_id}/labels/{label_id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec delete(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def delete(client, inbox_id, label_id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "DELETE",
-      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/labels/#{BillionSend.Client.encode_path(label_id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `delete/4`, but returns the answer or raises."
-  @spec delete!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
-  def delete!(client, inbox_id, label_id, opts \\ []) do
-    BillionSend.Client.unwrap!(delete(client, inbox_id, label_id, opts))
-  end
-
-  @doc """
-  Update a label.
-
-  `PATCH /inboxes/{inbox_id}/labels/{label_id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec update(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def update(client, inbox_id, label_id, params \\ nil, opts \\ []) do
-    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
-
-    BillionSend.Client.call(
-      client,
-      "PATCH",
-      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/labels/#{BillionSend.Client.encode_path(label_id)}",
-      opts,
-      body: params
-    )
-  end
-
-  @doc "Like `update/5`, but returns the answer or raises."
-  @spec update!(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
-          term()
-  def update!(client, inbox_id, label_id, params \\ nil, opts \\ []) do
-    BillionSend.Client.unwrap!(update(client, inbox_id, label_id, params, opts))
-  end
-
-  @doc """
   List an inbox's labels.
 
   Oldest first, every label (at most 100), unpaged.
@@ -2682,6 +2623,65 @@ defmodule BillionSend.Inboxes.Labels do
   @spec create!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
   def create!(client, inbox_id, params, opts \\ []) do
     BillionSend.Client.unwrap!(create(client, inbox_id, params, opts))
+  end
+
+  @doc """
+  Update a label.
+
+  `PATCH /inboxes/{inbox_id}/labels/{label_id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec update(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def update(client, inbox_id, label_id, params \\ nil, opts \\ []) do
+    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
+
+    BillionSend.Client.call(
+      client,
+      "PATCH",
+      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/labels/#{BillionSend.Client.encode_path(label_id)}",
+      opts,
+      body: params
+    )
+  end
+
+  @doc "Like `update/5`, but returns the answer or raises."
+  @spec update!(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
+          term()
+  def update!(client, inbox_id, label_id, params \\ nil, opts \\ []) do
+    BillionSend.Client.unwrap!(update(client, inbox_id, label_id, params, opts))
+  end
+
+  @doc """
+  Delete a label.
+
+  Also takes it off every thread, with no per-thread event.
+
+  `DELETE /inboxes/{inbox_id}/labels/{label_id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec delete(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def delete(client, inbox_id, label_id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/labels/#{BillionSend.Client.encode_path(label_id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `delete/4`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
+  def delete!(client, inbox_id, label_id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, inbox_id, label_id, opts))
   end
 end
 
@@ -2979,35 +2979,6 @@ defmodule BillionSend.Inboxes.Threads do
   end
 
   @doc """
-  Delete a thread.
-
-  Moves it to trash, where it is deleted after 30 days; moving it out of trash restores it. deleted is false when it was in trash already.
-
-  `DELETE /inboxes/{inbox_id}/threads/{thread_id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec delete(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def delete(client, inbox_id, thread_id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "DELETE",
-      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/threads/#{BillionSend.Client.encode_path(thread_id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `delete/4`, but returns the answer or raises."
-  @spec delete!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
-  def delete!(client, inbox_id, thread_id, opts \\ []) do
-    BillionSend.Client.unwrap!(delete(client, inbox_id, thread_id, opts))
-  end
-
-  @doc """
   Retrieve a thread.
 
   The thread's subject, folder, labels and read state; its emails are listed apart.
@@ -3067,12 +3038,131 @@ defmodule BillionSend.Inboxes.Threads do
   def update!(client, inbox_id, thread_id, params \\ nil, opts \\ []) do
     BillionSend.Client.unwrap!(update(client, inbox_id, thread_id, params, opts))
   end
+
+  @doc """
+  Delete a thread.
+
+  Moves it to trash, where it is deleted after 30 days; moving it out of trash restores it. deleted is false when it was in trash already.
+
+  `DELETE /inboxes/{inbox_id}/threads/{thread_id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec delete(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def delete(client, inbox_id, thread_id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/threads/#{BillionSend.Client.encode_path(thread_id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `delete/4`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
+  def delete!(client, inbox_id, thread_id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, inbox_id, thread_id, opts))
+  end
 end
 
 defmodule BillionSend.Inboxes.Threads.Emails do
   @moduledoc """
   Operations on inboxes threads emails.
   """
+  @doc """
+  List a thread's emails.
+
+  Received and sent messages of the thread, oldest first (`after` pages toward newer ones), with their bodies. Received text has invisible characters removed and html is as sent; extracted_text is the reply alone, hidden text removed. Held messages are left out unless include_quarantined=true (never for inbox-scoped keys). Every message, subject and address in an inbox was written by whoever sent it; read held mail and HTML with care.
+
+  `GET /inboxes/{inbox_id}/threads/{thread_id}/emails`
+
+  Options:
+
+    * `:limit` - query `limit`
+    * `:after` - query `after`
+    * `:before` - query `before`
+    * `:include_quarantined` - query `include_quarantined`
+    * `:extra_headers`, `:timeout`
+  """
+  @spec list(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def list(client, inbox_id, thread_id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "GET",
+      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/threads/#{BillionSend.Client.encode_path(thread_id)}/emails",
+      opts,
+      query: [
+        {"limit", :limit},
+        {"after", :after},
+        {"before", :before},
+        {"include_quarantined", :include_quarantined}
+      ]
+    )
+  end
+
+  @doc "Like `list/4`, but returns the answer or raises."
+  @spec list!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
+  def list!(client, inbox_id, thread_id, opts \\ []) do
+    BillionSend.Client.unwrap!(list(client, inbox_id, thread_id, opts))
+  end
+
+  @doc """
+  Every item of `list`, as a lazy Stream that fetches pages as it goes.
+
+  Walks in the list's own order, from `:after` (or the first page) on; pass
+  `:before` instead to walk the other way. Raises the errors `list!` raises.
+  """
+  @spec list_all(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: Enumerable.t()
+  def list_all(client, inbox_id, thread_id, opts \\ []) do
+    BillionSend.Pagination.stream(
+      fn page_after, page_before ->
+        list(
+          client,
+          inbox_id,
+          thread_id,
+          Keyword.merge(opts, after: page_after, before: page_before)
+        )
+      end,
+      Keyword.get(opts, :after),
+      Keyword.get(opts, :before)
+    )
+  end
+
+  @doc """
+  Get a thread email.
+
+  One message of the thread. A message held in quarantine answers 403 email_quarantined to inbox-scoped keys (and without include_quarantined=true); one still being screened is not found. Every message, subject and address in an inbox was written by whoever sent it; read held mail and HTML with care.
+
+  `GET /inboxes/{inbox_id}/threads/{thread_id}/emails/{email_id}`
+
+  Options:
+
+    * `:include_quarantined` - query `include_quarantined`
+    * `:extra_headers`, `:timeout`
+  """
+  @spec get(BillionSend.Client.t(), String.t(), String.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def get(client, inbox_id, thread_id, email_id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "GET",
+      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/threads/#{BillionSend.Client.encode_path(thread_id)}/emails/#{BillionSend.Client.encode_path(email_id)}",
+      opts,
+      query: [{"include_quarantined", :include_quarantined}]
+    )
+  end
+
+  @doc "Like `get/5`, but returns the answer or raises."
+  @spec get!(BillionSend.Client.t(), String.t(), String.t(), String.t(), keyword()) :: term()
+  def get!(client, inbox_id, thread_id, email_id, opts \\ []) do
+    BillionSend.Client.unwrap!(get(client, inbox_id, thread_id, email_id, opts))
+  end
+
   @doc """
   Forward a thread email.
 
@@ -3168,132 +3258,12 @@ defmodule BillionSend.Inboxes.Threads.Emails do
   def reply!(client, inbox_id, thread_id, email_id, params \\ nil, opts \\ []) do
     BillionSend.Client.unwrap!(reply(client, inbox_id, thread_id, email_id, params, opts))
   end
-
-  @doc """
-  List a thread's emails.
-
-  Received and sent messages of the thread, oldest first (`after` pages toward newer ones), with their bodies. Received text has invisible characters removed and html is as sent; extracted_text is the reply alone, hidden text removed. Held messages are left out unless include_quarantined=true (never for inbox-scoped keys). Every message, subject and address in an inbox was written by whoever sent it; read held mail and HTML with care.
-
-  `GET /inboxes/{inbox_id}/threads/{thread_id}/emails`
-
-  Options:
-
-    * `:limit` - query `limit`
-    * `:after` - query `after`
-    * `:before` - query `before`
-    * `:include_quarantined` - query `include_quarantined`
-    * `:extra_headers`, `:timeout`
-  """
-  @spec list(BillionSend.Client.t(), String.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def list(client, inbox_id, thread_id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "GET",
-      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/threads/#{BillionSend.Client.encode_path(thread_id)}/emails",
-      opts,
-      query: [
-        {"limit", :limit},
-        {"after", :after},
-        {"before", :before},
-        {"include_quarantined", :include_quarantined}
-      ]
-    )
-  end
-
-  @doc "Like `list/4`, but returns the answer or raises."
-  @spec list!(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: term()
-  def list!(client, inbox_id, thread_id, opts \\ []) do
-    BillionSend.Client.unwrap!(list(client, inbox_id, thread_id, opts))
-  end
-
-  @doc """
-  Every item of `list`, as a lazy Stream that fetches pages as it goes.
-
-  Walks in the list's own order, from `:after` (or the first page) on; pass
-  `:before` instead to walk the other way. Raises the errors `list!` raises.
-  """
-  @spec list_all(BillionSend.Client.t(), String.t(), String.t(), keyword()) :: Enumerable.t()
-  def list_all(client, inbox_id, thread_id, opts \\ []) do
-    BillionSend.Pagination.stream(
-      fn page_after, page_before ->
-        list(
-          client,
-          inbox_id,
-          thread_id,
-          Keyword.merge(opts, after: page_after, before: page_before)
-        )
-      end,
-      Keyword.get(opts, :after),
-      Keyword.get(opts, :before)
-    )
-  end
-
-  @doc """
-  Get a thread email.
-
-  One message of the thread. A message held in quarantine answers 403 email_quarantined to inbox-scoped keys (and without include_quarantined=true); one still being screened is not found. Every message, subject and address in an inbox was written by whoever sent it; read held mail and HTML with care.
-
-  `GET /inboxes/{inbox_id}/threads/{thread_id}/emails/{email_id}`
-
-  Options:
-
-    * `:include_quarantined` - query `include_quarantined`
-    * `:extra_headers`, `:timeout`
-  """
-  @spec get(BillionSend.Client.t(), String.t(), String.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def get(client, inbox_id, thread_id, email_id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "GET",
-      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/threads/#{BillionSend.Client.encode_path(thread_id)}/emails/#{BillionSend.Client.encode_path(email_id)}",
-      opts,
-      query: [{"include_quarantined", :include_quarantined}]
-    )
-  end
-
-  @doc "Like `get/5`, but returns the answer or raises."
-  @spec get!(BillionSend.Client.t(), String.t(), String.t(), String.t(), keyword()) :: term()
-  def get!(client, inbox_id, thread_id, email_id, opts \\ []) do
-    BillionSend.Client.unwrap!(get(client, inbox_id, thread_id, email_id, opts))
-  end
 end
 
 defmodule BillionSend.Inboxes.Threads.Labels do
   @moduledoc """
   Operations on inboxes threads labels.
   """
-  @doc """
-  Add labels to a thread.
-
-  Puts 1-10 of the inbox's labels on the thread and keeps the ones it has. If any label is unknown, nothing changes (404). Answers every label on the thread afterwards; one inbox.thread.labels.updated event reports the request.
-
-  `POST /inboxes/{inbox_id}/threads/{thread_id}/labels`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec add(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def add(client, inbox_id, thread_id, params, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "POST",
-      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/threads/#{BillionSend.Client.encode_path(thread_id)}/labels",
-      opts,
-      body: params
-    )
-  end
-
-  @doc "Like `add/5`, but returns the answer or raises."
-  @spec add!(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
-          term()
-  def add!(client, inbox_id, thread_id, params, opts \\ []) do
-    BillionSend.Client.unwrap!(add(client, inbox_id, thread_id, params, opts))
-  end
-
   @doc """
   Set a thread's labels.
 
@@ -3322,6 +3292,36 @@ defmodule BillionSend.Inboxes.Threads.Labels do
           term()
   def set!(client, inbox_id, thread_id, params, opts \\ []) do
     BillionSend.Client.unwrap!(set(client, inbox_id, thread_id, params, opts))
+  end
+
+  @doc """
+  Add labels to a thread.
+
+  Puts 1-10 of the inbox's labels on the thread and keeps the ones it has. If any label is unknown, nothing changes (404). Answers every label on the thread afterwards; one inbox.thread.labels.updated event reports the request.
+
+  `POST /inboxes/{inbox_id}/threads/{thread_id}/labels`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec add(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def add(client, inbox_id, thread_id, params, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "POST",
+      "/inboxes/#{BillionSend.Client.encode_path(inbox_id)}/threads/#{BillionSend.Client.encode_path(thread_id)}/labels",
+      opts,
+      body: params
+    )
+  end
+
+  @doc "Like `add/5`, but returns the answer or raises."
+  @spec add!(BillionSend.Client.t(), String.t(), String.t(), map() | list() | nil, keyword()) ::
+          term()
+  def add!(client, inbox_id, thread_id, params, opts \\ []) do
+    BillionSend.Client.unwrap!(add(client, inbox_id, thread_id, params, opts))
   end
 
   @doc """
@@ -3358,89 +3358,6 @@ defmodule BillionSend.Segments do
   @moduledoc """
   Operations on segments. See also `BillionSend.Segments.Contacts`.
   """
-  @doc """
-  Delete a segment.
-
-  `DELETE /segments/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def delete(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "DELETE",
-      "/segments/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `delete/3`, but returns the answer or raises."
-  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def delete!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(delete(client, id, opts))
-  end
-
-  @doc """
-  Retrieve a segment.
-
-  `GET /segments/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec get(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def get(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "GET",
-      "/segments/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `get/3`, but returns the answer or raises."
-  @spec get!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def get!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(get(client, id, opts))
-  end
-
-  @doc """
-  Update a segment.
-
-  `PATCH /segments/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec update(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def update(client, id, params \\ nil, opts \\ []) do
-    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
-
-    BillionSend.Client.call(
-      client,
-      "PATCH",
-      "/segments/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      body: params
-    )
-  end
-
-  @doc "Like `update/4`, but returns the answer or raises."
-  @spec update!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
-  def update!(client, id, params \\ nil, opts \\ []) do
-    BillionSend.Client.unwrap!(update(client, id, params, opts))
-  end
-
   @doc """
   List segments.
 
@@ -3504,6 +3421,89 @@ defmodule BillionSend.Segments do
   @spec create!(BillionSend.Client.t(), map() | list() | nil, keyword()) :: term()
   def create!(client, params, opts \\ []) do
     BillionSend.Client.unwrap!(create(client, params, opts))
+  end
+
+  @doc """
+  Retrieve a segment.
+
+  `GET /segments/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec get(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def get(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "GET",
+      "/segments/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `get/3`, but returns the answer or raises."
+  @spec get!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def get!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(get(client, id, opts))
+  end
+
+  @doc """
+  Update a segment.
+
+  `PATCH /segments/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec update(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def update(client, id, params \\ nil, opts \\ []) do
+    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
+
+    BillionSend.Client.call(
+      client,
+      "PATCH",
+      "/segments/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      body: params
+    )
+  end
+
+  @doc "Like `update/4`, but returns the answer or raises."
+  @spec update!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
+  def update!(client, id, params \\ nil, opts \\ []) do
+    BillionSend.Client.unwrap!(update(client, id, params, opts))
+  end
+
+  @doc """
+  Delete a segment.
+
+  `DELETE /segments/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def delete(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/segments/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `delete/3`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def delete!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, id, opts))
   end
 end
 
@@ -3633,33 +3633,6 @@ defmodule BillionSend.Suppressions do
   end
 
   @doc """
-  Remove a suppression.
-
-  `DELETE /suppressions/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def delete(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "DELETE",
-      "/suppressions/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `delete/3`, but returns the answer or raises."
-  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def delete!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(delete(client, id, opts))
-  end
-
-  @doc """
   Retrieve a suppression.
 
   `GET /suppressions/{id}`
@@ -3684,6 +3657,33 @@ defmodule BillionSend.Suppressions do
   @spec get!(BillionSend.Client.t(), String.t(), keyword()) :: term()
   def get!(client, id, opts \\ []) do
     BillionSend.Client.unwrap!(get(client, id, opts))
+  end
+
+  @doc """
+  Remove a suppression.
+
+  `DELETE /suppressions/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def delete(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/suppressions/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `delete/3`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def delete!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, id, opts))
   end
 end
 
@@ -3738,143 +3738,6 @@ defmodule BillionSend.Templates do
   @moduledoc """
   Operations on templates.
   """
-  @doc """
-  Publish a template.
-
-  `POST /templates/{id}/publish`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec publish(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def publish(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "POST",
-      "/templates/#{BillionSend.Client.encode_path(id)}/publish",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `publish/3`, but returns the answer or raises."
-  @spec publish!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def publish!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(publish(client, id, opts))
-  end
-
-  @doc """
-  Delete a template.
-
-  `DELETE /templates/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def delete(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "DELETE",
-      "/templates/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `delete/3`, but returns the answer or raises."
-  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def delete!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(delete(client, id, opts))
-  end
-
-  @doc """
-  Retrieve a template.
-
-  `GET /templates/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec get(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def get(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "GET",
-      "/templates/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `get/3`, but returns the answer or raises."
-  @spec get!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def get!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(get(client, id, opts))
-  end
-
-  @doc """
-  Update a template.
-
-  `PATCH /templates/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec update(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def update(client, id, params \\ nil, opts \\ []) do
-    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
-
-    BillionSend.Client.call(
-      client,
-      "PATCH",
-      "/templates/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      body: params
-    )
-  end
-
-  @doc "Like `update/4`, but returns the answer or raises."
-  @spec update!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
-  def update!(client, id, params \\ nil, opts \\ []) do
-    BillionSend.Client.unwrap!(update(client, id, params, opts))
-  end
-
-  @doc """
-  Duplicate a template.
-
-  `POST /templates/{id}/duplicate`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec duplicate(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def duplicate(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "POST",
-      "/templates/#{BillionSend.Client.encode_path(id)}/duplicate",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `duplicate/3`, but returns the answer or raises."
-  @spec duplicate!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def duplicate!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(duplicate(client, id, opts))
-  end
-
   @doc """
   List templates.
 
@@ -3939,16 +3802,67 @@ defmodule BillionSend.Templates do
   def create!(client, params, opts \\ []) do
     BillionSend.Client.unwrap!(create(client, params, opts))
   end
-end
 
-defmodule BillionSend.Topics do
-  @moduledoc """
-  Operations on topics.
-  """
   @doc """
-  Delete a topic.
+  Retrieve a template.
 
-  `DELETE /topics/{id}`
+  `GET /templates/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec get(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def get(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "GET",
+      "/templates/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `get/3`, but returns the answer or raises."
+  @spec get!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def get!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(get(client, id, opts))
+  end
+
+  @doc """
+  Update a template.
+
+  `PATCH /templates/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec update(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def update(client, id, params \\ nil, opts \\ []) do
+    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
+
+    BillionSend.Client.call(
+      client,
+      "PATCH",
+      "/templates/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      body: params
+    )
+  end
+
+  @doc "Like `update/4`, but returns the answer or raises."
+  @spec update!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
+  def update!(client, id, params \\ nil, opts \\ []) do
+    BillionSend.Client.unwrap!(update(client, id, params, opts))
+  end
+
+  @doc """
+  Delete a template.
+
+  `DELETE /templates/{id}`
 
   Options:
 
@@ -3960,7 +3874,7 @@ defmodule BillionSend.Topics do
     BillionSend.Client.call(
       client,
       "DELETE",
-      "/topics/#{BillionSend.Client.encode_path(id)}",
+      "/templates/#{BillionSend.Client.encode_path(id)}",
       opts,
       []
     )
@@ -3970,6 +3884,106 @@ defmodule BillionSend.Topics do
   @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
   def delete!(client, id, opts \\ []) do
     BillionSend.Client.unwrap!(delete(client, id, opts))
+  end
+
+  @doc """
+  Duplicate a template.
+
+  `POST /templates/{id}/duplicate`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec duplicate(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def duplicate(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "POST",
+      "/templates/#{BillionSend.Client.encode_path(id)}/duplicate",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `duplicate/3`, but returns the answer or raises."
+  @spec duplicate!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def duplicate!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(duplicate(client, id, opts))
+  end
+
+  @doc """
+  Publish a template.
+
+  `POST /templates/{id}/publish`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec publish(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def publish(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "POST",
+      "/templates/#{BillionSend.Client.encode_path(id)}/publish",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `publish/3`, but returns the answer or raises."
+  @spec publish!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def publish!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(publish(client, id, opts))
+  end
+end
+
+defmodule BillionSend.Topics do
+  @moduledoc """
+  Operations on topics.
+  """
+  @doc """
+  List topics.
+
+  `GET /topics`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec list(BillionSend.Client.t(), keyword()) :: {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def list(client, opts \\ []) do
+    BillionSend.Client.call(client, "GET", "/topics", opts, [])
+  end
+
+  @doc "Like `list/2`, but returns the answer or raises."
+  @spec list!(BillionSend.Client.t(), keyword()) :: term()
+  def list!(client, opts \\ []) do
+    BillionSend.Client.unwrap!(list(client, opts))
+  end
+
+  @doc """
+  Create a topic.
+
+  `POST /topics`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec create(BillionSend.Client.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def create(client, params, opts \\ []) do
+    BillionSend.Client.call(client, "POST", "/topics", opts, body: params)
+  end
+
+  @doc "Like `create/3`, but returns the answer or raises."
+  @spec create!(BillionSend.Client.t(), map() | list() | nil, keyword()) :: term()
+  def create!(client, params, opts \\ []) do
+    BillionSend.Client.unwrap!(create(client, params, opts))
   end
 
   @doc """
@@ -4025,55 +4039,9 @@ defmodule BillionSend.Topics do
   end
 
   @doc """
-  List topics.
+  Delete a topic.
 
-  `GET /topics`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec list(BillionSend.Client.t(), keyword()) :: {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def list(client, opts \\ []) do
-    BillionSend.Client.call(client, "GET", "/topics", opts, [])
-  end
-
-  @doc "Like `list/2`, but returns the answer or raises."
-  @spec list!(BillionSend.Client.t(), keyword()) :: term()
-  def list!(client, opts \\ []) do
-    BillionSend.Client.unwrap!(list(client, opts))
-  end
-
-  @doc """
-  Create a topic.
-
-  `POST /topics`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec create(BillionSend.Client.t(), map() | list() | nil, keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def create(client, params, opts \\ []) do
-    BillionSend.Client.call(client, "POST", "/topics", opts, body: params)
-  end
-
-  @doc "Like `create/3`, but returns the answer or raises."
-  @spec create!(BillionSend.Client.t(), map() | list() | nil, keyword()) :: term()
-  def create!(client, params, opts \\ []) do
-    BillionSend.Client.unwrap!(create(client, params, opts))
-  end
-end
-
-defmodule BillionSend.Unsubscribes do
-  @moduledoc """
-  Operations on unsubscribes.
-  """
-  @doc """
-  Delete an unsubscribe.
-
-  `DELETE /unsubscribes/{id}`
+  `DELETE /topics/{id}`
 
   Options:
 
@@ -4085,7 +4053,7 @@ defmodule BillionSend.Unsubscribes do
     BillionSend.Client.call(
       client,
       "DELETE",
-      "/unsubscribes/#{BillionSend.Client.encode_path(id)}",
+      "/topics/#{BillionSend.Client.encode_path(id)}",
       opts,
       []
     )
@@ -4096,7 +4064,12 @@ defmodule BillionSend.Unsubscribes do
   def delete!(client, id, opts \\ []) do
     BillionSend.Client.unwrap!(delete(client, id, opts))
   end
+end
 
+defmodule BillionSend.Unsubscribes do
+  @moduledoc """
+  Operations on unsubscribes.
+  """
   @doc """
   List unsubscribes.
 
@@ -4161,6 +4134,33 @@ defmodule BillionSend.Unsubscribes do
   @spec create!(BillionSend.Client.t(), map() | list() | nil, keyword()) :: term()
   def create!(client, params, opts \\ []) do
     BillionSend.Client.unwrap!(create(client, params, opts))
+  end
+
+  @doc """
+  Delete an unsubscribe.
+
+  `DELETE /unsubscribes/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def delete(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/unsubscribes/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `delete/3`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def delete!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, id, opts))
   end
 end
 
@@ -4261,33 +4261,6 @@ defmodule BillionSend.Verifications do
   end
 
   @doc """
-  Retrieve a verification.
-
-  `GET /verifications/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec get(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def get(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "GET",
-      "/verifications/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `get/3`, but returns the answer or raises."
-  @spec get!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def get!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(get(client, id, opts))
-  end
-
-  @doc """
   Check verification availability.
 
   `GET /verifications/availability`
@@ -4330,43 +4303,11 @@ defmodule BillionSend.Verifications do
   def estimate!(client, params, opts \\ []) do
     BillionSend.Client.unwrap!(estimate(client, params, opts))
   end
-end
-
-defmodule BillionSend.Webhooks do
-  @moduledoc """
-  Operations on webhooks.
-  """
-  @doc """
-  Delete a webhook.
-
-  `DELETE /webhooks/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
-  """
-  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def delete(client, id, opts \\ []) do
-    BillionSend.Client.call(
-      client,
-      "DELETE",
-      "/webhooks/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      []
-    )
-  end
-
-  @doc "Like `delete/3`, but returns the answer or raises."
-  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def delete!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(delete(client, id, opts))
-  end
 
   @doc """
-  Retrieve a webhook.
+  Retrieve a verification.
 
-  `GET /webhooks/{id}`
+  `GET /verifications/{id}`
 
   Options:
 
@@ -4378,7 +4319,7 @@ defmodule BillionSend.Webhooks do
     BillionSend.Client.call(
       client,
       "GET",
-      "/webhooks/#{BillionSend.Client.encode_path(id)}",
+      "/verifications/#{BillionSend.Client.encode_path(id)}",
       opts,
       []
     )
@@ -4389,36 +4330,12 @@ defmodule BillionSend.Webhooks do
   def get!(client, id, opts \\ []) do
     BillionSend.Client.unwrap!(get(client, id, opts))
   end
+end
 
-  @doc """
-  Update a webhook.
-
-  `PATCH /webhooks/{id}`
-
-  Options:
-
-    * `:extra_headers`, `:timeout`
+defmodule BillionSend.Webhooks do
+  @moduledoc """
+  Operations on webhooks.
   """
-  @spec update(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
-          {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def update(client, id, params \\ nil, opts \\ []) do
-    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
-
-    BillionSend.Client.call(
-      client,
-      "PATCH",
-      "/webhooks/#{BillionSend.Client.encode_path(id)}",
-      opts,
-      body: params
-    )
-  end
-
-  @doc "Like `update/4`, but returns the answer or raises."
-  @spec update!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
-  def update!(client, id, params \\ nil, opts \\ []) do
-    BillionSend.Client.unwrap!(update(client, id, params, opts))
-  end
-
   @doc """
   List webhooks.
 
@@ -4482,6 +4399,89 @@ defmodule BillionSend.Webhooks do
   @spec create!(BillionSend.Client.t(), map() | list() | nil, keyword()) :: term()
   def create!(client, params, opts \\ []) do
     BillionSend.Client.unwrap!(create(client, params, opts))
+  end
+
+  @doc """
+  Retrieve a webhook.
+
+  `GET /webhooks/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec get(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def get(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "GET",
+      "/webhooks/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `get/3`, but returns the answer or raises."
+  @spec get!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def get!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(get(client, id, opts))
+  end
+
+  @doc """
+  Update a webhook.
+
+  `PATCH /webhooks/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec update(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def update(client, id, params \\ nil, opts \\ []) do
+    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
+
+    BillionSend.Client.call(
+      client,
+      "PATCH",
+      "/webhooks/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      body: params
+    )
+  end
+
+  @doc "Like `update/4`, but returns the answer or raises."
+  @spec update!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
+  def update!(client, id, params \\ nil, opts \\ []) do
+    BillionSend.Client.unwrap!(update(client, id, params, opts))
+  end
+
+  @doc """
+  Delete a webhook.
+
+  `DELETE /webhooks/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def delete(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/webhooks/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `delete/3`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def delete!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, id, opts))
   end
 
   @doc """

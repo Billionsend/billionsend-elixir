@@ -76,11 +76,17 @@ defmodule Generate do
   end
 
   def operations(spec) do
+    # Sorted: a map's iteration order differs between OTP releases.
     found =
-      for {path, item} <- spec["paths"],
-          {m, op} <- item,
-          m in @methods,
-          do: {String.upcase(m), path, op}
+      for(
+        {path, item} <- spec["paths"],
+        {m, op} <- item,
+        m in @methods,
+        do: {String.upcase(m), path, op}
+      )
+      |> Enum.sort_by(fn {m, path, _} ->
+        {path, Enum.find_index(@methods, &(&1 == String.downcase(m)))}
+      end)
 
     ids = Enum.map(found, fn {_, _, op} -> op["operationId"] end)
 
