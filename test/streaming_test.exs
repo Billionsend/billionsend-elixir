@@ -135,23 +135,45 @@ defmodule BillionSend.EventStreamTest do
     assert sleeps() == [1000, 1000]
   end
 
-  test "connections that close at once are given up on" do
+  test "a quiet inbox keeps reconnecting" do
     {client, mock} = client()
-    for _ <- 1..3, do: answer(mock, @team, [])
-    {:ok, stream} = BillionSend.Inboxes.Events.stream(client, max_reconnects: 2)
-    assert_raise BillionSend.APIConnectionError, fn -> Enum.to_list(stream) end
-    assert length(Mock.calls(mock)) == 3
+    # The server ends a stream every ten minutes; a quiet inbox gets only keepalives.
+    for _ <- 1..8, do: answer(mock, @team, [": keepalive\n\n"])
+    answer(mock, @team, [frame("1", "inbox.email.received")])
+    {:ok, stream} = BillionSend.Inboxes.Events.stream(client, max_reconnects: 1)
+    assert Enum.map(Enum.take(stream, 1), & &1.id) == ~w(1)
+    assert length(Mock.calls(mock)) == 9
+    assert sleeps() == List.duplicate(1000, 8)
   end
 
-  test "an event starts the count again" do
+  test "a connection that opens starts the count again" do
     {client, mock} = client()
-    # Without the reset, the 3rd disconnect would pass max_reconnects 2.
+    # Without the reset, the 3rd failed reconnect would pass max_reconnects 2.
     answer(mock, @team, [])
+
+    for _ <- 1..2 do
+      Mock.error(mock, "GET", @team, 503, "unavailable", "Try later")
+      answer(mock, @team, [])
+    end
+
+    Mock.error(mock, "GET", @team, 503, "unavailable", "Try later")
     answer(mock, @team, [frame("1", "inbox.email.received")])
-    answer(mock, @team, [])
-    answer(mock, @team, [frame("2", "inbox.email.received")])
     {:ok, stream} = BillionSend.Inboxes.Events.stream(client, max_reconnects: 2)
-    assert Enum.map(Enum.take(stream, 2), & &1.id) == ~w(1 2)
+    assert Enum.map(Enum.take(stream, 1), & &1.id) == ~w(1)
+  end
+
+  test "an error raised while handling an event passes through" do
+    {client, mock} = client()
+    answer(mock, @team, [frame("1", "inbox.email.received"), frame("2", "inbox.email.received")])
+    {:ok, stream} = BillionSend.Inboxes.Events.stream(client)
+
+    assert_raise BillionSend.APIConnectionError, "application_error: the reply failed", fn ->
+      Enum.each(stream, fn _ ->
+        raise BillionSend.APIConnectionError, message: "the reply failed"
+      end)
+    end
+
+    assert length(Mock.calls(mock)) == 1
   end
 
   test "a refused reconnect raises its own error" do

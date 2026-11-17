@@ -150,10 +150,11 @@ defmodule BillionSend.EventStream do
   `BillionSend.StreamGapEvent` structs. When the server ends the stream (it does
   so every few minutes) or the connection drops, it reconnects with
   Last-Event-ID set to the last id it saw and resumes without losing events,
-  waiting a second (or the server's retry field) first. After `max_reconnects:`
-  disconnects in a row without an event in between, the enumeration raises
-  `BillionSend.APIConnectionError`; a reconnect the API refuses for good (a
-  revoked key) raises its own error.
+  waiting a second (or the server's retry field) first. A connection that
+  opens starts the count again, however quiet the inbox; after
+  `max_reconnects:` reconnects in a row that fail to open, the enumeration
+  raises `BillionSend.APIConnectionError`; a reconnect the API refuses for good
+  (a revoked key) raises its own error.
 
   The server replays at most 24 hours of missed events. A stream resumed from
   an older id first gets a `BillionSend.StreamGapEvent`: events may be missing,
@@ -217,8 +218,9 @@ defmodule BillionSend.EventStream do
 
   defp next(%{closed: true} = s), do: {:halt, s}
 
-  # Disconnected: count it, wait, connect again. `failures` counts the
-  # disconnects since the last event; any event starts it again.
+  # Disconnected: count it, wait, connect again. `failures` counts the end of
+  # the last open connection and each reconnect since that failed to open; a
+  # connection that opens starts it again.
   defp next(%{handle: nil} = s) do
     failures = s.failures + 1
 
@@ -231,7 +233,7 @@ defmodule BillionSend.EventStream do
 
     case connect(s) do
       {:ok, handle} ->
-        {[], %{s | handle: handle, decoder: SSEDecoder.new(), failures: failures}}
+        {[], %{s | handle: handle, decoder: SSEDecoder.new(), failures: 0}}
 
       {:error, error} ->
         if retryable?(error), do: {[], %{s | failures: failures}}, else: raise(error)
@@ -245,12 +247,7 @@ defmodule BillionSend.EventStream do
       {:ok, chunk, handle} ->
         {events, decoder} = SSEDecoder.feed(s.decoder, chunk)
 
-        s = %{
-          s
-          | handle: handle,
-            decoder: decoder,
-            failures: if(events == [], do: s.failures, else: 0)
-        }
+        s = %{s | handle: handle, decoder: decoder}
 
         {out, s} = Enum.reduce(events, {[], s}, &saw/2)
         s = if s.closed, do: release(s), else: s
