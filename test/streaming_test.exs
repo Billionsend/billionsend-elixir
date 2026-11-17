@@ -127,8 +127,39 @@ defmodule BillionSend.EventStreamTest do
     answer(mock, @team, [frame("1", "inbox.email.received")])
     for _ <- 1..3, do: Mock.error(mock, "GET", @team, 503, "unavailable", "Try later")
     {:ok, stream} = BillionSend.Inboxes.Events.stream(client, max_reconnects: 2)
-    assert_raise BillionSend.APIError, fn -> Enum.to_list(stream) end
-    assert sleeps() == [1000, 1000, 2000]
+
+    assert_raise BillionSend.APIConnectionError,
+                 "application_error: The event stream disconnected; gave up after 2 reconnects",
+                 fn -> Enum.to_list(stream) end
+
+    assert sleeps() == [1000, 1000]
+  end
+
+  test "connections that close at once are given up on" do
+    {client, mock} = client()
+    for _ <- 1..3, do: answer(mock, @team, [])
+    {:ok, stream} = BillionSend.Inboxes.Events.stream(client, max_reconnects: 2)
+    assert_raise BillionSend.APIConnectionError, fn -> Enum.to_list(stream) end
+    assert length(Mock.calls(mock)) == 3
+  end
+
+  test "an event starts the count again" do
+    {client, mock} = client()
+    # Without the reset, the 3rd disconnect would pass max_reconnects 2.
+    answer(mock, @team, [])
+    answer(mock, @team, [frame("1", "inbox.email.received")])
+    answer(mock, @team, [])
+    answer(mock, @team, [frame("2", "inbox.email.received")])
+    {:ok, stream} = BillionSend.Inboxes.Events.stream(client, max_reconnects: 2)
+    assert Enum.map(Enum.take(stream, 2), & &1.id) == ~w(1 2)
+  end
+
+  test "a refused reconnect raises its own error" do
+    {client, mock} = client()
+    answer(mock, @team, [frame("1", "inbox.email.received")])
+    Mock.error(mock, "GET", @team, 401, "invalid_api_key", "Revoked")
+    {:ok, stream} = BillionSend.Inboxes.Events.stream(client)
+    assert_raise BillionSend.AuthenticationError, fn -> Enum.to_list(stream) end
   end
 
   test "without reconnects a dropped connection raises" do

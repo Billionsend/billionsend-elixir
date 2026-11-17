@@ -6,7 +6,7 @@ defmodule BillionSend.TransportTest do
   use ExUnit.Case, async: false
 
   defp serve(handler, fun) do
-    {:ok, listen} = :gen_tcp.listen(0, [:binary, active: false, reuseaddr: true, packet: :raw])
+    {:ok, listen} = :gen_tcp.listen(0, [:binary, active: false, packet: :raw])
     {:ok, port} = :inet.port(listen)
     parent = self()
 
@@ -85,6 +85,7 @@ defmodule BillionSend.TransportTest do
         assert_received {:request, head, ""}
         assert head =~ "GET /domains?limit=3 HTTP/1.1"
         assert head =~ ~r/authorization: Bearer bs_socket_test/i
+        assert head =~ ~r/connection: close/i
       end
     )
   end
@@ -142,7 +143,7 @@ defmodule BillionSend.TransportTest do
         end
       end,
       fn url ->
-        {:ok, stream} = BillionSend.Inboxes.Events.stream(client(url), max_reconnects: 0)
+        {:ok, stream} = BillionSend.Inboxes.Events.stream(client(url, sleep: fn _ -> :ok end))
         assert [%BillionSend.InboxStreamEvent{id: "1"}] = Enum.take(stream, 1)
         assert_received {:request, head, _}
         assert head =~ ~r/accept: text\/event-stream/i

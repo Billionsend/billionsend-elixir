@@ -149,9 +149,11 @@ defmodule BillionSend.EventStream do
   lazy `Enumerable` of `BillionSend.InboxStreamEvent` and
   `BillionSend.StreamGapEvent` structs. When the server ends the stream (it does
   so every few minutes) or the connection drops, it reconnects with
-  Last-Event-ID set to the last id it saw and resumes without losing events.
-  `max_reconnects:` bounds the consecutive failed reconnect attempts (0 turns
-  reconnecting off). An error reconnecting cannot fix is raised.
+  Last-Event-ID set to the last id it saw and resumes without losing events,
+  waiting a second (or the server's retry field) first. After `max_reconnects:`
+  disconnects in a row without an event in between, the enumeration raises
+  `BillionSend.APIConnectionError`; a reconnect the API refuses for good (a
+  revoked key) raises its own error.
 
   The server replays at most 24 hours of missed events. A stream resumed from
   an older id first gets a `BillionSend.StreamGapEvent`: events may be missing,
@@ -167,7 +169,6 @@ defmodule BillionSend.EventStream do
   alias BillionSend.{InboxStreamEvent, SSEDecoder, StreamGapEvent}
 
   @default_retry_ms 1_000
-  @max_reconnect_delay_ms 30_000
   @team_stream_path "/inboxes/events"
   # After one of these, the server ends an inbox's own stream for good.
   @inbox_gone ~w(inbox.deleted inbox.expired)
@@ -192,6 +193,7 @@ defmodule BillionSend.EventStream do
       one_inbox: String.trim_trailing(path, "/") != @team_stream_path,
       # The position a gap was last handed out at; the server repeats it on reconnect.
       gap_at: :none,
+      failures: 0,
       handle: nil,
       decoder: SSEDecoder.new()
     }
@@ -215,7 +217,26 @@ defmodule BillionSend.EventStream do
 
   defp next(%{closed: true} = s), do: {:halt, s}
 
-  defp next(%{handle: nil} = s), do: next(%{s | handle: reconnect(s, 0), decoder: SSEDecoder.new()})
+  # Disconnected: count it, wait, connect again. `failures` counts the
+  # disconnects since the last event; any event starts it again.
+  defp next(%{handle: nil} = s) do
+    failures = s.failures + 1
+
+    if failures > s.max_reconnects do
+      raise BillionSend.APIConnectionError,
+        message: "The event stream disconnected; gave up after #{s.max_reconnects} reconnects"
+    end
+
+    s.client.sleep.(s.retry_ms)
+
+    case connect(s) do
+      {:ok, handle} ->
+        {[], %{s | handle: handle, decoder: SSEDecoder.new(), failures: failures}}
+
+      {:error, error} ->
+        if retryable?(error), do: {[], %{s | failures: failures}}, else: raise(error)
+    end
+  end
 
   defp next(s) do
     {module, state} = s.client.transport
@@ -223,38 +244,18 @@ defmodule BillionSend.EventStream do
     case module.next_chunk(state, s.handle) do
       {:ok, chunk} ->
         {events, decoder} = SSEDecoder.feed(s.decoder, chunk)
-        {out, s} = Enum.reduce(events, {[], %{s | decoder: decoder}}, &saw/2)
+        s = %{s | decoder: decoder, failures: if(events == [], do: s.failures, else: 0)}
+        {out, s} = Enum.reduce(events, {[], s}, &saw/2)
         s = if s.closed, do: release(s), else: s
         {Enum.reverse(out), s}
 
       :done ->
         # Every event was handed out; an id sent without data still moves the position.
         s = %{s | last_event_id: s.decoder.last_event_id || s.last_event_id}
-        ended(release(absorb_retry(s)), nil)
+        {[], release(absorb_retry(s))}
 
-      {:error, error} ->
-        ended(release(absorb_retry(s)), error)
-    end
-  end
-
-  defp ended(%{max_reconnects: 0} = s, nil), do: {:halt, %{s | closed: true}}
-  defp ended(%{max_reconnects: 0}, error), do: raise(error)
-
-  defp ended(s, _error) do
-    s.client.sleep.(s.retry_ms)
-    {[], s}
-  end
-
-  defp reconnect(s, failures) do
-    case connect(s) do
-      {:ok, handle} ->
-        handle
-
-      {:error, error} ->
-        failures = failures + 1
-        if not retryable?(error) or failures > s.max_reconnects, do: raise(error)
-        s.client.sleep.(failure_delay(s, failures, error))
-        reconnect(s, failures)
+      {:error, _dropped} ->
+        {[], release(absorb_retry(s))}
     end
   end
 
@@ -266,13 +267,6 @@ defmodule BillionSend.EventStream do
         BillionSend.RateLimitError,
         BillionSend.APIError
       ]
-
-  defp failure_delay(_s, _failures, %BillionSend.RateLimitError{retry_after: seconds})
-       when is_number(seconds),
-       do: min(round(seconds * 1000), @max_reconnect_delay_ms)
-
-  defp failure_delay(s, failures, _),
-    do: min(round(s.retry_ms * :math.pow(2, failures - 1)), @max_reconnect_delay_ms)
 
   defp saw(_sse, {out, %{closed: true} = s}), do: {out, s}
 

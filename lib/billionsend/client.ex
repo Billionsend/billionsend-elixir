@@ -356,7 +356,7 @@ defmodule BillionSend.Client do
     case auth do
       :missing ->
         {:error,
-         %BillionSend.Error{
+         %BillionSend.AuthenticationError{
            message: "No API key: pass api_key: or set BILLIONSEND_API_KEY",
            name: "missing_api_key"
          }}

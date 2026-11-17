@@ -61,12 +61,20 @@ defmodule BillionSend.Transport.Httpc do
 
   alias BillionSend.{APIConnectionError, APITimeoutError, Request, Response}
 
+  @profile :billionsend
+
   @impl true
   def request(_state, %Request{} = req) do
     ensure_started()
 
     with {:ok, http_options} <- http_options(req) do
-      case :httpc.request(method(req), request_tuple(req), http_options, body_format: :binary) do
+      case :httpc.request(
+             method(req),
+             request_tuple(req),
+             http_options,
+             [body_format: :binary],
+             @profile
+           ) do
         {:ok, {{_, status, _}, headers, body}} ->
           {:ok, %Response{status: status, headers: headers_map(headers), body: body}}
 
@@ -82,7 +90,7 @@ defmodule BillionSend.Transport.Httpc do
     options = [sync: false, stream: {:self, :once}, body_format: :binary]
 
     with {:ok, http_options} <- http_options(req) do
-      case :httpc.request(method(req), request_tuple(req), http_options, options) do
+      case :httpc.request(method(req), request_tuple(req), http_options, options, @profile) do
         {:ok, id} -> await_head(id, req.timeout)
         {:error, reason} -> {:error, failure(reason)}
       end
@@ -99,7 +107,7 @@ defmodule BillionSend.Transport.Httpc do
       {:http, {^id, {:error, reason}}} -> {:error, failure(reason)}
     after
       timeout ->
-        :httpc.cancel_request(id)
+        :httpc.cancel_request(id, @profile)
         {:error, %APITimeoutError{message: "No event stream data for #{div(timeout, 1000)} s"}}
     end
   end
@@ -109,7 +117,7 @@ defmodule BillionSend.Transport.Httpc do
 
   @impl true
   def close_stream(_state, {id, _pid, _timeout}) do
-    :httpc.cancel_request(id)
+    :httpc.cancel_request(id, @profile)
     flush(id)
   end
 
@@ -129,7 +137,7 @@ defmodule BillionSend.Transport.Httpc do
         {:error, failure(reason)}
     after
       timeout ->
-        :httpc.cancel_request(id)
+        :httpc.cancel_request(id, @profile)
         flush(id)
         {:error, %APITimeoutError{message: "Request timed out"}}
     end
@@ -145,9 +153,30 @@ defmodule BillionSend.Transport.Httpc do
     end
   end
 
+  # The SDK's own :httpc profile, so its settings touch nothing else of the
+  # application: no request ever waits in line on a connection that is still
+  # busy with another one (keep-alive queueing, pipelining), since a request
+  # that timed out leaves its connection open, and the next one queued behind
+  # it would fail when that connection finally closes.
   defp ensure_started do
     {:ok, _} = Application.ensure_all_started([:inets, :ssl])
-    :ok
+
+    case :inets.start(:httpc, profile: @profile) do
+      {:ok, _} ->
+        :ok =
+          :httpc.set_options(
+            [
+              max_keep_alive_length: 0,
+              max_pipeline_length: 0,
+              max_sessions: 1_000,
+              keep_alive_timeout: 0
+            ],
+            @profile
+          )
+
+      {:error, {:already_started, _}} ->
+        :ok
+    end
   end
 
   defp method(%Request{method: m}), do: m |> String.downcase() |> String.to_existing_atom()
@@ -169,8 +198,14 @@ defmodule BillionSend.Transport.Httpc do
     {String.to_charlist(url), charlist_headers(rest), String.to_charlist(type), body}
   end
 
+  # One connection per request: a pooled keep-alive connection the server has
+  # already closed fails a request that never reached it, which for a request
+  # that cannot be retried (a POST without an idempotency key) is a lost call.
   defp charlist_headers(headers) do
-    Enum.map(headers, fn {k, v} -> {String.to_charlist(k), String.to_charlist(v)} end)
+    [
+      {~c"connection", ~c"close"}
+      | Enum.map(headers, fn {k, v} -> {String.to_charlist(k), String.to_charlist(v)} end)
+    ]
   end
 
   defp http_options(%Request{url: url, timeout: timeout}) do

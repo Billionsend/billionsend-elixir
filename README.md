@@ -98,7 +98,7 @@ Waiting for a sign-in code sent to the inbox is one call: `BillionSend.Inboxes.C
 - `BillionSend.InboxStreamEvent`: `id` (the stream position), `event` (such as `"inbox.email.received"`) and `data`, a map with `"type"`, `"created_at"`, `"inbox_id"` and `"data"` (the webhook payload of the same event).
 - `BillionSend.StreamGapEvent`: `event: "stream.gap"`, `id: nil`, and `data["reason"]` says why. The stream was resumed from a position older than the 24 hours the API replays, so some events may be missing: catch up through the lists (`BillionSend.Inboxes.Threads.list_all(client, inbox_id, read: false)`) before going on. It is handed out once per position.
 
-The server ends a stream every few minutes and connections drop; the stream reconnects on its own with `Last-Event-ID`, so no event is lost or repeated. `max_reconnects:` bounds consecutive failed reconnects (default 5, `0` turns reconnecting off; 429 answers wait for their `Retry-After`). An error that reconnecting cannot fix is raised from the enumeration. One inbox's stream ends after that inbox's `inbox.deleted` or `inbox.expired` event. Enumerate a stream once, in the process that opened it; halting the enumeration (`Enum.take/2`, `Stream.take_while/2`, a `throw` out of the loop) closes the connection.
+The server ends a stream every few minutes and connections drop; the stream reconnects on its own with `Last-Event-ID`, so no event is lost or repeated. Before reconnecting it waits a second (or what the server's `retry` field asks). `max_reconnects:` (default 5) bounds the disconnects in a row without an event in between: past it, the enumeration raises `BillionSend.APIConnectionError` ("gave up after N reconnects"). A reconnect the API refuses for good, such as a revoked key, raises its own error. One inbox's stream ends after that inbox's `inbox.deleted` or `inbox.expired` event. Enumerate a stream once, in the process that opened it; halting the enumeration (`Enum.take/2`, `Stream.take_while/2`, a `throw` out of the loop) closes the connection.
 
 To pick up where a process left off, keep the `id` of the last `InboxStreamEvent` you handled and pass it back:
 
@@ -205,7 +205,7 @@ A request is retried when repeating it is safe: GET, PUT and DELETE, and any req
 
 | Option | Environment | Default |
 | --- | --- | --- |
-| `api_key:` | `BILLIONSEND_API_KEY` | none (only `Agent.signup` works without one) |
+| `api_key:` | `BILLIONSEND_API_KEY` | none (only `Agent.signup` works without one; any other call returns `BillionSend.AuthenticationError`, `missing_api_key`) |
 | `base_url:` | `BILLIONSEND_BASE_URL` | `https://api.billionsend.com` |
 | `timeout:` | | `60_000` ms per attempt (an event stream waits at least 60 s for each read) |
 | `max_retries:` | | `2` |

@@ -42,7 +42,7 @@ defmodule BillionSend.ClientTest do
     with_env(%{"BILLIONSEND_API_KEY" => nil}, fn ->
       {client, mock} = client(api_key: nil)
 
-      assert {:error, %BillionSend.Error{name: "missing_api_key"}} =
+      assert {:error, %BillionSend.AuthenticationError{name: "missing_api_key", status_code: nil}} =
                BillionSend.Domains.list(client)
 
       assert Mock.calls(mock) == []
