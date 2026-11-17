@@ -151,10 +151,13 @@ defmodule BillionSend.EventStream do
   so every few minutes) or the connection drops, it reconnects with
   Last-Event-ID set to the last id it saw and resumes without losing events,
   waiting a second (or the server's retry field) first. A connection that
-  opens starts the count again, however quiet the inbox; after
-  `max_reconnects:` reconnects in a row that fail to open, the enumeration
-  raises `BillionSend.APIConnectionError`; a reconnect the API refuses for good
-  (a revoked key) raises its own error.
+  opens starts the count again, however quiet the inbox. A reconnect the API
+  answers with a 429 or 5xx waits what its Retry-After asks (one over 60
+  seconds raises that error at once). After `max_reconnects:` reconnects in a
+  row that fail to open, the enumeration raises the API's error for the last
+  one (`BillionSend.RateLimitError`, `BillionSend.APIError`), or
+  `BillionSend.APIConnectionError` when it got no answer; a reconnect the API
+  refuses for good (a revoked key) raises its own error.
 
   The server replays at most 24 hours of missed events. A stream resumed from
   an older id first gets a `BillionSend.StreamGapEvent`: events may be missing,
@@ -195,6 +198,9 @@ defmodule BillionSend.EventStream do
       # The position a gap was last handed out at; the server repeats it on reconnect.
       gap_at: :none,
       failures: 0,
+      # The API's answer to the last failed reconnect, and the wait it asked for (ms).
+      last_error: nil,
+      wait_ms: nil,
       handle: nil,
       decoder: SSEDecoder.new()
     }
@@ -225,18 +231,29 @@ defmodule BillionSend.EventStream do
     failures = s.failures + 1
 
     if failures > s.max_reconnects do
-      raise BillionSend.APIConnectionError,
-        message: "The event stream disconnected; gave up after #{s.max_reconnects} reconnects"
+      raise s.last_error ||
+              %BillionSend.APIConnectionError{
+                message:
+                  "The event stream disconnected; gave up after #{s.max_reconnects} reconnects"
+              }
     end
 
-    s.client.sleep.(s.retry_ms)
+    s.client.sleep.(s.wait_ms || s.retry_ms)
+    s = %{s | failures: failures, wait_ms: nil}
 
     case connect(s) do
       {:ok, handle} ->
-        {[], %{s | handle: handle, decoder: SSEDecoder.new(), failures: 0}}
+        {[], %{s | handle: handle, decoder: SSEDecoder.new(), failures: 0, last_error: nil}}
+
+      {:error, %{status_code: status} = error} when is_integer(status) ->
+        unless retryable?(error), do: raise(error)
+
+        hinted = error.response && BillionSend.Client.retry_after(error.response)
+        if hinted && hinted > BillionSend.Client.max_retry_delay(), do: raise(error)
+        {[], %{s | last_error: error, wait_ms: hinted && round(hinted * 1000)}}
 
       {:error, error} ->
-        if retryable?(error), do: {[], %{s | failures: failures}}, else: raise(error)
+        if retryable?(error), do: {[], %{s | last_error: nil}}, else: raise(error)
     end
   end
 

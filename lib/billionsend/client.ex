@@ -153,6 +153,10 @@ defmodule BillionSend.Client do
   end
 
   @doc false
+  # The longest Retry-After waited for, in seconds; a longer one returns the error.
+  def max_retry_delay, do: @max_retry_delay
+
+  @doc false
   # Seconds to wait before retrying after `error`, or nil to return it.
   #
   # Retried: requests that are safe to repeat (GET, PUT, DELETE, or any request

@@ -128,10 +128,7 @@ defmodule BillionSend.EventStreamTest do
     for _ <- 1..3, do: Mock.error(mock, "GET", @team, 503, "unavailable", "Try later")
     {:ok, stream} = BillionSend.Inboxes.Events.stream(client, max_reconnects: 2)
 
-    assert_raise BillionSend.APIConnectionError,
-                 "application_error: The event stream disconnected; gave up after 2 reconnects",
-                 fn -> Enum.to_list(stream) end
-
+    assert_raise BillionSend.APIError, "503 unavailable: Try later", fn -> Enum.to_list(stream) end
     assert sleeps() == [1000, 1000]
   end
 
@@ -174,6 +171,59 @@ defmodule BillionSend.EventStreamTest do
     end
 
     assert length(Mock.calls(mock)) == 1
+  end
+
+  test "a refused reconnect waits its Retry-After and raises the API's error" do
+    {client, mock} = client()
+    answer(mock, @team, [frame("1", "inbox.email.received")])
+
+    for _ <- 1..3,
+        do:
+          Mock.error(mock, "GET", @team, 429, "too_many_streams", "Too many open streams",
+            headers: [{"retry-after", "5"}]
+          )
+
+    {:ok, stream} = BillionSend.Inboxes.Events.stream(client, max_reconnects: 2)
+    error = assert_raise BillionSend.RateLimitError, fn -> Enum.to_list(stream) end
+    assert error.name == "too_many_streams"
+    assert sleeps() == [1000, 5000]
+  end
+
+  test "a Retry-After over a minute raises at once" do
+    {client, mock} = client()
+    answer(mock, @team, [frame("1", "inbox.email.received")])
+
+    Mock.error(mock, "GET", @team, 503, "unavailable", "Down for maintenance",
+      headers: [{"retry-after", "120"}]
+    )
+
+    {:ok, stream} = BillionSend.Inboxes.Events.stream(client)
+    assert_raise BillionSend.APIError, fn -> Enum.to_list(stream) end
+    assert sleeps() == [1000]
+    assert length(Mock.calls(mock)) == 2
+  end
+
+  test "reconnects that get no answer raise a connection error" do
+    {client, mock} = client()
+    answer(mock, @team, [frame("1", "inbox.email.received")])
+
+    Mock.error(mock, "GET", @team, 429, "too_many_streams", "Too many open streams",
+      headers: [{"retry-after", "2"}]
+    )
+
+    for _ <- 1..2,
+        do:
+          Mock.fail(mock, "GET", @team, %BillionSend.APIConnectionError{
+            message: "Connection refused"
+          })
+
+    {:ok, stream} = BillionSend.Inboxes.Events.stream(client, max_reconnects: 2)
+
+    assert_raise BillionSend.APIConnectionError,
+                 "application_error: The event stream disconnected; gave up after 2 reconnects",
+                 fn -> Enum.to_list(stream) end
+
+    assert sleeps() == [1000, 2000]
   end
 
   test "a refused reconnect raises its own error" do
