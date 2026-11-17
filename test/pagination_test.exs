@@ -57,4 +57,52 @@ defmodule BillionSend.PaginationTest do
       client |> BillionSend.Contacts.list_all() |> Enum.to_list()
     end
   end
+
+  test "a page without a data array raises" do
+    for answer <- [
+          %{"object" => "list", "has_more" => false},
+          %{"object" => "list", "data" => nil, "has_more" => false},
+          %{"object" => "list", "data" => %{}, "has_more" => false},
+          [1, 2]
+        ] do
+      {client, mock} = client()
+
+      Mock.respond(mock, "GET", "/contacts", 200,
+        body: JSON.encode!(answer),
+        headers: [{"content-type", "application/json"}]
+      )
+
+      error =
+        assert_raise BillionSend.Error, fn ->
+          client |> BillionSend.Contacts.list_all() |> Enum.to_list()
+        end
+
+      assert error.message == "The list page has no data array"
+      assert error.name == "application_error"
+      assert error.status_code == nil
+    end
+  end
+
+  test "a page whose last item has no id hands out its items, then raises" do
+    {client, mock} = client()
+    page = page([@a, @b], true)
+    page = update_in(page, ["data"], fn [first, last] -> [first, Map.delete(last, "id")] end)
+
+    Mock.respond(mock, "GET", "/contacts", 200,
+      body: JSON.encode!(page),
+      headers: [{"content-type", "application/json"}]
+    )
+
+    parent = self()
+
+    error =
+      assert_raise BillionSend.Error, fn ->
+        client |> BillionSend.Contacts.list_all() |> Enum.each(&send(parent, {:item, &1}))
+      end
+
+    assert error.message == "The last item of the list page has no id to continue from"
+    assert_received {:item, _}
+    assert_received {:item, _}
+    assert length(Mock.calls(mock)) == 1
+  end
 end
