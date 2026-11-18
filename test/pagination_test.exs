@@ -105,4 +105,47 @@ defmodule BillionSend.PaginationTest do
     assert_received {:item, _}
     assert length(Mock.calls(mock)) == 1
   end
+
+  test "an error on a later page comes after the items already handed out, and ends the walk" do
+    {client, mock} = client(max_retries: 0)
+    Mock.respond(mock, "GET", "/contacts", 200, json: page([@a, @b], true))
+    Mock.error(mock, "GET", "/contacts", 500, "internal_error", "Oops")
+    parent = self()
+
+    assert_raise BillionSend.APIError, "500 internal_error: Oops", fn ->
+      client |> BillionSend.Contacts.list_all() |> Enum.each(&send(parent, {:item, &1["id"]}))
+    end
+
+    assert_received {:item, @a}
+    assert_received {:item, @b}
+    assert length(Mock.calls(mock)) == 2
+  end
+
+  test "an empty page that says there is more ends the walk instead of looping" do
+    {client, mock} = client()
+    Mock.respond(mock, "GET", "/contacts", 200, json: page([], true))
+    assert client |> BillionSend.Contacts.list_all() |> Enum.to_list() == []
+    assert length(Mock.calls(mock)) == 1
+  end
+
+  test "a page that has no more stops there, whatever the next id would be" do
+    {client, mock} = client()
+    Mock.respond(mock, "GET", "/contacts", 200, json: page([@a], false))
+    assert length(Enum.to_list(BillionSend.Contacts.list_all(client))) == 1
+    assert length(Mock.calls(mock)) == 1
+  end
+
+  test "an item id that is not text cannot be continued from" do
+    {client, mock} = client()
+    broken = update_in(page([@a], true), ["data"], fn [item] -> [%{item | "id" => ""}] end)
+
+    Mock.respond(mock, "GET", "/contacts", 200,
+      body: JSON.encode!(broken),
+      headers: [{"content-type", "application/json"}]
+    )
+
+    assert_raise BillionSend.Error, ~r/no id to continue from/, fn ->
+      client |> BillionSend.Contacts.list_all() |> Enum.to_list()
+    end
+  end
 end

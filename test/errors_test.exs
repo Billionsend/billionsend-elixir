@@ -75,4 +75,80 @@ defmodule BillionSend.ErrorsTest do
             }} =
              BillionSend.Domains.list(client)
   end
+
+  describe "an answer that is not the API's error shape" do
+    defp refuse(body, status \\ 500, headers \\ []) do
+      {client, mock} = client(max_retries: 0)
+      Mock.respond(mock, "GET", "/domains", status, body: body, headers: headers)
+      assert {:error, error} = BillionSend.Domains.list(client)
+      error
+    end
+
+    test "a JSON error without name or message gets the defaults" do
+      error = refuse(~s({"statusCode":404}), 404)
+      assert %BillionSend.NotFoundError{name: "application_error", message: "HTTP 404"} = error
+    end
+
+    test "a name or message that is not text is ignored" do
+      error = refuse(~s({"name":1,"message":{"a":1}}), 400)
+      assert %BillionSend.ValidationError{name: "application_error", message: "HTTP 400"} = error
+    end
+
+    test "a JSON body that is not an object is shown as text" do
+      assert %BillionSend.APIError{message: "[1,2]"} = refuse("[1,2]")
+    end
+
+    test "an empty body is only its status" do
+      assert %BillionSend.APIError{message: "HTTP 502", name: "application_error"} = refuse("", 502)
+      assert %BillionSend.APIError{message: "HTTP 502"} = refuse("  \n", 502)
+    end
+
+    test "a page of HTML is shortened to 500 characters and keeps its whole body" do
+      html = "<html>" <> String.duplicate("x", 2_000) <> "</html>"
+      error = refuse(html, 502, [{"content-type", "text/html"}])
+      assert String.length(error.message) == 500
+      assert error.response.body == html
+      assert error.response.status == 502
+      assert BillionSend.Response.header(error.response, "Content-Type") == "text/html"
+    end
+
+    test "the request id is nil when the answer has none" do
+      assert refuse(~s({"statusCode":500,"name":"x","message":"y"})).request_id == nil
+    end
+  end
+
+  test "every status has its error, and only the SDK's errors are errors" do
+    for {status, module} <- [
+          {400, BillionSend.ValidationError},
+          {422, BillionSend.ValidationError},
+          {401, BillionSend.AuthenticationError},
+          {403, BillionSend.PermissionDeniedError},
+          {404, BillionSend.NotFoundError},
+          {409, BillionSend.ConflictError},
+          {429, BillionSend.RateLimitError},
+          {500, BillionSend.APIError},
+          {599, BillionSend.APIError},
+          {301, BillionSend.Error},
+          {410, BillionSend.Error}
+        ] do
+      assert BillionSend.Errors.module_for(status) == module
+    end
+
+    for module <- [
+          BillionSend.Error,
+          BillionSend.APIConnectionError,
+          BillionSend.APITimeoutError,
+          BillionSend.WebhookVerificationError
+        ] do
+      assert BillionSend.Errors.error?(struct(module, message: "x"))
+    end
+
+    refute BillionSend.Errors.error?(%RuntimeError{message: "x"})
+    refute BillionSend.Errors.error?(:error)
+  end
+
+  test "an error that has no status reads without one" do
+    error = %BillionSend.APITimeoutError{message: "Request timed out"}
+    assert Exception.message(error) == "application_error: Request timed out"
+  end
 end

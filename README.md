@@ -40,7 +40,7 @@ A client is a plain struct: build it once and pass it to every call, from any pr
 
 ## Authentication
 
-Pass an API key (`bs_…`) as `api_key:` or set `BILLIONSEND_API_KEY`. Keys are made in the dashboard or with `BillionSend.ApiKeys.create/3`. A key scoped to one inbox can only reach that inbox.
+Pass an API key (`bs_…`) as `api_key:` or set `BILLIONSEND_API_KEY`; whitespace around it, such as the newline a file read leaves, is dropped. Keys are made in the dashboard or with `BillionSend.ApiKeys.create/3`. A key scoped to one inbox can only reach that inbox.
 
 An agent can also create its own account, the one call that needs no key:
 
@@ -170,7 +170,7 @@ A CSV import is the one operation that takes a file: `BillionSend.Contacts.Impor
 
 Each function is named after its operation's `operationId` in the API document: the groups make the module, the last segment the function, camelCase written in snake_case. `emails.receiving.attachments.list` is `BillionSend.Emails.Receiving.Attachments.list/3` and `agent.claimEmail` is `BillionSend.Agent.claim_email/2`. An `operationId` that is also the group of others needs nothing special in Elixir, since a module and a function of the same name live side by side: `emails.metrics` is `BillionSend.Emails.metrics/2` and `emails.metrics.links` is `BillionSend.Emails.Metrics.links/2`.
 
-Arguments come in this order: the client, the path parameters (`BillionSend.Domains.get(client, domain_id)`), the request body as a map (`BillionSend.Domains.create(client, %{name: "acme.dev"})`), then a keyword list of options: the query and header parameters (`BillionSend.Emails.list(client, limit: 50)`; a list parameter takes a list), `:extra_headers` and `:timeout`. A body the operation does not require may be left out (`BillionSend.Domains.verify(client, domain_id)`). An unknown option, or a missing required one, raises `ArgumentError` before anything is sent. Anything the functions do not cover goes through `BillionSend.Client.request(client, "GET", "/path", query: [...])`.
+Arguments come in this order: the client, the path parameters (`BillionSend.Domains.get(client, domain_id)`; a `nil` or empty one raises `ArgumentError` instead of calling the whole collection), the request body as a map, or a keyword list, which is sent as an object (`BillionSend.Domains.create(client, %{name: "acme.dev"})`), then a keyword list of options: the query and header parameters (`BillionSend.Emails.list(client, limit: 50)`; a list parameter takes a list), `:extra_headers` and `:timeout`. A body the operation does not require may be left out (`BillionSend.Domains.verify(client, domain_id)`). An unknown option, or a missing required one, raises `ArgumentError` before anything is sent. Anything the functions do not cover goes through `BillionSend.Client.request(client, "GET", "/path", query: [...])`.
 
 ## Pagination
 
@@ -223,19 +223,43 @@ A request is retried when repeating it is safe: GET, PUT and DELETE, and any req
 | --- | --- | --- |
 | `api_key:` | `BILLIONSEND_API_KEY` | none (only `Agent.signup` works without one; any other call returns `BillionSend.AuthenticationError`, `missing_api_key`) |
 | `base_url:` | `BILLIONSEND_BASE_URL` | `https://api.billionsend.com` |
-| `timeout:` | | `60_000` ms per attempt (an event stream waits at least 60 s for each read) |
+| `timeout:` | | `60_000` ms per attempt, a positive integer (an event stream waits at least 60 s for each read) |
 | `max_retries:` | | `2` |
 | `default_headers:` | | none |
-| `transport:` | | the HTTP layer, `{module, state}` implementing `BillionSend.Transport` (`BillionSend.Transport.Httpc` by default: requests through `:httpc` in a profile of the SDK's own, one connection each; event streams on their own HTTP/1.1 connection that hands every event out as it arrives; both over `:ssl`, verifying the server against the system's CA store) |
+| `transport:` | | the HTTP layer, `{module, state}` implementing `BillionSend.Transport` (`BillionSend.Transport.Httpc` by default: requests through `:httpc` in a profile of the SDK's own, one connection each; event streams on their own HTTP/1.1 connection that hands every event out as it arrives; both over `:ssl`, verifying the server against the system's CA store; `{BillionSend.Transport.Httpc, cacerts: [der, ...]}` verifies against your own CA instead, and `stream_read_timeout:` sets how long an event stream may stay silent) |
 
 ## Development
 
 ```bash
-mix test
-scripts/test.sh   # generate --check, format, compile and test with warnings as errors, in the pinned Elixir image
+mix test          # offline: no network, no key
+scripts/test.sh   # generate --check, format, compile, test and the coverage gates, in the pinned Elixir image
 ```
 
-The SDK is built from a snapshot of the API's OpenAPI document, `openapi/api.openapi.json`. The snapshot is the contract: `scripts/generate.exs` writes `lib/billionsend/resources.ex` from it (module and function names from each `operationId`, idempotency keys where an operation declares the `Idempotency-Key` header, streams for cursor lists), and the tests check every request the SDK sends and every answer it reads against it through a contract mock (`test/support/contract.ex`). A coverage test fails when an operation of the snapshot has no SDK function, or when a resource module has a function that is not an operation.
+The SDK is built from a snapshot of the API's OpenAPI document, `openapi/api.openapi.json`. The snapshot is the contract: `scripts/generate.exs` writes `lib/billionsend/resources.ex` from it (module and function names from each `operationId`, idempotency keys where an operation declares the `Idempotency-Key` header, streams for cursor lists), and the tests hold the SDK to it:
+
+- `test/operations_test.exs` runs every operation (180) through a contract mock and through the SDK's default transport on a real local socket, with only what the operation requires and with every parameter and body field it has; what the SDK sends is compared with what the document says it must send (path, query, headers, body), the answer is the document's own example or one built from its schema and must come back unchanged, and every kind of failure is followed. Every answer and every request is also validated against the document's schemas (`test/support/contract.ex`).
+- `test/wire_test.exs` runs the default transport against real sockets, plain and TLS: headers, bodies, every kind of answer, event streams in every framing, certificate checks.
+- `test/readme_test.exs` runs every code block of this README as written, against a local server that answers by the contract; a block that is added to the README and not to the test fails it.
+- `test/client_test.exs`, `retries_test.exs`, `errors_test.exs`, `pagination_test.exs`, `streaming_test.exs`, `webhook_test.exs` and `new_operations_test.exs` cover the runtime: client options, retries and `Retry-After`, the error shapes, paging, the event stream and its decoder, webhook verification, uploads.
+
+Coverage is a CI gate: `mix test --cover` fails below 95% of the lines of the hand-written code (`mix.exs`), `COVERAGE_SCOPE=generated mix test.coverage` below 95% of the lines of the generated code, and `scripts/branch_coverage.exs` below 95% of the branches of the hand-written code (Erlang's `cover` measures lines, not branches; the script says how it counts). To see the numbers:
+
+```bash
+mix test --cover --export-coverage all
+mix test.coverage
+COVERAGE_SCOPE=generated mix test.coverage
+mix run --no-start scripts/branch_coverage.exs cover/all.coverdata --list
+```
+
+### Live tests
+
+`test/e2e` runs the SDK against the real API. It is not part of `mix test` and CI does not run it:
+
+```bash
+BILLIONSEND_E2E_API_KEY=bs_... mix e2e
+```
+
+Every request is checked against the published OpenAPI document (`https://billionsend.com/docs/api.openapi.json`, downloaded at the start) before it is sent, and every answer after it is received, so a snapshot that has fallen behind the API fails here. The suite is written for a real account: it only reads what exists, creates objects named `sdk-e2e-elixir-<random>` and deletes them again (also when a test fails), sends at most 20 emails, only to `success@simulator.amazonses.com` and its plus-aliases and from the address `SDK E2E <sdk-e2e@mail.billionsend.dev>` (which the account must have a verified domain for), makes at most 150 requests, one a second, and stops on a second 429 in a row. It creates no domain, sends no broadcast, unsubscribes nobody and uses no inbox. The README examples that can run under these rules run there as written; the end of `test/e2e/live_test.exs` lists what cannot, and why.
 
 When the API changes:
 
@@ -245,7 +269,7 @@ elixir scripts/generate.exs
 mix test
 ```
 
-Whatever fails is what the SDK has to follow. CI runs `scripts/generate.exs --check` so the generated code never drifts from the snapshot, and `scripts/sync_openapi.exs --check` (on every push and pull request, and once a day) so the snapshot never drifts from the published API: it fails when `https://billionsend.com/docs/api.openapi.json` differs from `openapi/api.openapi.json`. The tests themselves never go online.
+Whatever fails is what the SDK has to follow. CI runs `scripts/generate.exs --check` so the generated code never drifts from the snapshot, and `scripts/sync_openapi.exs --check` (on every push and pull request, and once a day) so the snapshot never drifts from the published API: it fails when `https://billionsend.com/docs/api.openapi.json` differs from `openapi/api.openapi.json`. The offline tests never go online.
 
 ## Releasing
 

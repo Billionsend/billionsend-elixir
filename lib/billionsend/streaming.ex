@@ -276,6 +276,9 @@ defmodule BillionSend.EventStream do
         {[], release(absorb_retry(s))}
 
       {:error, _dropped} ->
+        # The same as a clean end: a position sent without data (the id frame a
+        # new stream starts with) is where to resume from.
+        s = %{s | last_event_id: s.decoder.last_event_id || s.last_event_id}
         {[], release(absorb_retry(s))}
     end
   end

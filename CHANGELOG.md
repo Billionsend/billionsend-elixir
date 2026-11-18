@@ -10,6 +10,11 @@ The SDK follows the published API again: the OpenAPI snapshot it is built from h
 - Removed: `Unsubscribes.delete` (the API no longer has it; an opt-out is the recipient's to undo) and `Webhooks.rotate`, replaced by `Webhooks.rotate_signing_secret`.
 - Answers and requests changed with the API's: `Usage.get` now answers `emails.daily` / `emails.monthly`, `contacts`, `domains` and the other limits in place of the old `limits` block, and the contact, domain, broadcast, webhook, template and inbox shapes follow the new schemas.
 - `scripts/sync_openapi.exs --check` fails when the snapshot differs from the published document; CI runs it on every push and pull request and once a day. The tests stay offline.
+- Fixed: a POST, PUT or PATCH without a body (38 operations, among them `Domains.verify`, `Emails.cancel`, `Templates.publish`, `Broadcasts.send` and every update called with no fields) failed with `APIConnectionError` `:invalid_request` through the default transport; it now goes out with an empty body.
+- Fixed: an event stream that was dropped right after the position it was sent (`id:` with no event) resumed from nowhere and lost the events in between; it resumes from that position.
+- A key with whitespace around it (a trailing newline from a file) is trimmed; a header value that is not printable ASCII (an idempotency key with non-ASCII text, a line break) raises `ArgumentError` before sending instead of surfacing as a retried connection error; a `nil` or empty path parameter raises `ArgumentError` instead of calling the whole collection (`Domains.get(client, "")` returned the list); a `timeout:` that is not a positive integer raises instead of being ignored; a keyword list as a request body is sent as an object; `verify_webhook` with a payload that is not the raw body raises an `ArgumentError` that says so.
+- `BillionSend.Transport.Httpc` takes `cacerts:` (verify against your own CA) and `stream_read_timeout:` in its state.
+- No more compile warnings on Elixir 1.20.
 
 ## 0.1.0 (2026-11-17)
 

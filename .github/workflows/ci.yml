@@ -36,8 +36,15 @@ jobs:
         run: mix format --check-formatted
       - name: Compiles without warnings
         run: mix compile --warnings-as-errors
-      - name: Tests
-        run: mix test --warnings-as-errors
+      - name: Tests, with coverage
+        # One run, three gates: 95% of the lines of the hand-written code (mix.exs),
+        # 95% of the lines of the generated code, and 95% of the branches of the
+        # hand-written code (scripts/branch_coverage.exs).
+        run: |
+          mix test --warnings-as-errors --cover --export-coverage all
+          mix test.coverage
+          COVERAGE_SCOPE=generated mix test.coverage
+          mix run --no-start scripts/branch_coverage.exs cover/all.coverdata --threshold 95
 
   snapshot:
     name: Snapshot matches the published API

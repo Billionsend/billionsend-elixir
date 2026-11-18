@@ -21,7 +21,16 @@ defmodule BillionSend.Test.Contract do
 
   def api_key, do: "bs_test_key"
   def base_url, do: "https://api.test.billionsend.com"
-  def spec, do: @spec_doc
+
+  @doc "The OpenAPI document in force: the snapshot, or the one given to `use_spec/1`."
+  def spec, do: :persistent_term.get({__MODULE__, :spec}, @spec_doc)
+
+  @doc "Checks everything against another document (the live tests use the freshly published one)."
+  def use_spec(doc) do
+    :persistent_term.put({__MODULE__, :spec}, doc)
+    :persistent_term.erase({__MODULE__, :operations})
+    :ok
+  end
 
   @formats %{
     "uuid" => "0b6f5a2e-7c1d-4e8a-9f3b-2d4c6e8a0b1c",
@@ -58,27 +67,38 @@ defmodule BillionSend.Test.Contract do
       do: Enum.any?(params(op, "header"), &(String.downcase(&1["name"]) == "idempotency-key"))
   end
 
-  @operations (for {path, item} <- @spec_doc["paths"], {m, op} <- item, m in @methods do
-                 names = Regex.scan(~r/\{(\w+)\}/, path, capture: :all_but_first) |> List.flatten()
-                 pattern = Regex.replace(~r/\\\{\w+\\\}/, Regex.escape(path), "([^/]+)")
+  defp build_operations(doc) do
+    for({path, item} <- doc["paths"], {m, op} <- item, m in @methods, do: {path, m, op})
+    |> Enum.map(fn {path, m, op} ->
+      names = Regex.scan(~r/\{(\w+)\}/, path, capture: :all_but_first) |> List.flatten()
+      pattern = Regex.replace(~r/\\\{\w+\\\}/, Regex.escape(path), "([^/]+)")
 
-                 %{
-                   method: String.upcase(m),
-                   path: path,
-                   spec: op,
-                   regex: "\\A#{pattern}\\z",
-                   names: names
-                 }
-               end)
-              |> Enum.sort_by(fn o ->
-                {-Enum.count(
-                   String.split(o.path, "/"),
-                   &(&1 != "" and not String.contains?(&1, "{"))
-                 ), o.path}
-              end)
+      %Operation{
+        method: String.upcase(m),
+        path: path,
+        spec: op,
+        regex: Regex.compile!("\\A#{pattern}\\z"),
+        names: names
+      }
+    end)
+    |> Enum.sort_by(fn o ->
+      {-Enum.count(
+         String.split(o.path, "/"),
+         &(&1 != "" and not String.contains?(&1, "{"))
+       ), o.path}
+    end)
+  end
 
   def operations do
-    Enum.map(@operations, fn o -> struct(Operation, %{o | regex: Regex.compile!(o.regex)}) end)
+    case :persistent_term.get({__MODULE__, :operations}, nil) do
+      nil ->
+        ops = build_operations(spec())
+        :persistent_term.put({__MODULE__, :operations}, ops)
+        ops
+
+      ops ->
+        ops
+    end
   end
 
   def operation(method, path) do
@@ -109,7 +129,7 @@ defmodule BillionSend.Test.Contract do
 
   def flunk(message), do: raise(ExUnit.AssertionError, message: message)
 
-  def resolve(%{"$ref" => "#/" <> ref}), do: resolve(get_in(@spec_doc, String.split(ref, "/")))
+  def resolve(%{"$ref" => "#/" <> ref}), do: resolve(get_in(spec(), String.split(ref, "/")))
   def resolve(schema), do: schema || %{}
 
   # --- validation: the keywords the snapshot uses --------------------------------------------
@@ -311,8 +331,18 @@ defmodule BillionSend.Test.Contract do
     s = resolve(schema)
 
     cond do
-      match?([_], s["allOf"]) ->
-        example(hd(s["allOf"]), full)
+      # The document's own example wins, when it fits the schema it sits in.
+      Map.has_key?(s, "example") and errors(s["example"], Map.delete(s, "example")) == [] ->
+        s["example"]
+
+      s["allOf"] != nil ->
+        # The parts of an allOf that describe an object are merged; a part that only
+        # carries a description contributes nothing.
+        parts = Enum.map(s["allOf"], &example(&1, full))
+
+        if Enum.all?(parts, &is_map/1),
+          do: Enum.reduce(parts, %{}, &Map.merge(&2, &1)),
+          else: hd(parts)
 
       Enum.all?(~w(type enum anyOf oneOf properties), &(not Map.has_key?(s, &1))) ->
         %{}
@@ -497,6 +527,25 @@ defmodule BillionSend.Test.Mock do
     Agent.update(mock, &put_in(&1, [:streams, ref, :closed], true))
   end
 
+  @doc """
+  Answers a request as the API would, for a server standing in for it (see
+  `BillionSend.Test.ContractServer`). A request the contract refuses is recorded
+  (`violations/1`) and answered 599.
+  """
+  def serve(mock, %Request{} = req) do
+    handle(mock, req)
+  rescue
+    error in ExUnit.AssertionError ->
+      Agent.update(
+        mock,
+        &Map.update(&1, :violations, [error.message], fn v -> [error.message | v] end)
+      )
+
+      %{status: 599, headers: %{}, body: error.message, chunks: nil, error: nil}
+  end
+
+  def violations(mock), do: Agent.get(mock, &Enum.reverse(Map.get(&1, :violations, [])))
+
   def streams_closed?(mock),
     do: Agent.get(mock, fn s -> Enum.all?(s.streams, fn {_, v} -> v.closed end) end)
 
@@ -552,12 +601,32 @@ defmodule BillionSend.Test.Mock do
     end)
   end
 
-  defp check(op, call) do
+  @doc """
+  Finds the operation a request is for and checks the request against it, as the
+  mock does for every request; returns `{operation, call}`. `api_key` is the key
+  the request must carry. Raises `ExUnit.AssertionError` when the contract refuses it.
+  """
+  def inspect_request(%Request{} = req, api_key, check? \\ true) do
+    uri = URI.parse(req.url)
+    {op, path_params} = Contract.find(req.method, uri.path)
+
+    query =
+      (uri.query || "")
+      |> URI.query_decoder()
+      |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+
+    body = if req.body, do: decode_body(req)
+    call = %Call{operation: op, request: req, path_params: path_params, query: query, body: body}
+    if check?, do: check(op, call, api_key)
+    {op, call}
+  end
+
+  defp check(op, call, api_key \\ Contract.api_key()) do
     where = "#{op.method} #{op.path}"
     auth = Call.header(call, "authorization")
 
     cond do
-      Operation.needs_auth?(op) and auth != "Bearer #{Contract.api_key()}" ->
+      Operation.needs_auth?(op) and auth != "Bearer #{api_key}" ->
         Contract.flunk("#{where}: no API key")
 
       not Operation.needs_auth?(op) and auth != nil ->
@@ -582,11 +651,18 @@ defmodule BillionSend.Test.Mock do
         do: Contract.flunk("#{where}: unknown query parameter #{name}")
 
       if length(values) > 1, do: Contract.flunk("#{where}: query parameter #{name} sent twice")
-      enum = Contract.resolve(known[name]["schema"] || %{})["enum"]
 
-      if enum && hd(values) not in enum,
-        do: Contract.flunk("#{where}: #{name}=#{hd(values)} is not one of #{inspect(enum)}")
+      # The text on the wire, read as the parameter's type (integers, booleans,
+      # comma-separated arrays), against the parameter's whole schema.
+      schema = Contract.resolve(known[name]["schema"] || %{})
+      Contract.validate!(query_value(schema, hd(values)), schema, "#{where} query #{name}")
     end
+
+    for p <- Operation.params(op, "header"), value = Call.header(call, p["name"]), value != nil do
+      Contract.validate!(value, p["schema"] || %{}, "#{where} header #{p["name"]}")
+    end
+
+    check_media(op, call, where)
 
     for p <- Operation.params(op, "query") ++ Operation.params(op, "header"), p["required"] do
       present =
@@ -617,6 +693,45 @@ defmodule BillionSend.Test.Mock do
         [{_, %{"schema" => schema}}] = Enum.to_list(body["content"])
         Contract.validate!(value, schema, "#{where} body")
     end
+  end
+
+  defp query_value(%{"type" => "integer"}, text) do
+    case Integer.parse(text) do
+      {n, ""} -> n
+      _ -> text
+    end
+  end
+
+  defp query_value(%{"type" => "boolean"}, "true"), do: true
+  defp query_value(%{"type" => "boolean"}, "false"), do: false
+  defp query_value(%{"type" => "array"}, text), do: String.split(text, ",")
+  defp query_value(_, text), do: text
+
+  # What the request says about its own media types: the body's Content-Type
+  # is the one the operation declares, and Accept is the answer's.
+  defp check_media(op, call, where) do
+    content_type = Call.header(call, "content-type")
+
+    case {op.spec["requestBody"], call.body} do
+      {_, nil} ->
+        if content_type, do: Contract.flunk("#{where}: Content-Type without a body")
+
+      {body, _} ->
+        [media] = Map.keys(body["content"])
+
+        ok =
+          if media == "multipart/form-data",
+            do: String.starts_with?(content_type || "", "multipart/form-data; boundary="),
+            else: content_type == media
+
+        unless ok,
+          do: Contract.flunk("#{where}: Content-Type #{inspect(content_type)}, not #{media}")
+    end
+
+    {_, media, _} = Operation.success(op)
+
+    if Call.header(call, "accept") != media,
+      do: Contract.flunk("#{where}: Accept #{inspect(Call.header(call, "accept"))}, not #{media}")
   end
 
   defp generated(op) do

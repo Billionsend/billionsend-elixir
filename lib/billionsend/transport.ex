@@ -55,6 +55,16 @@ defmodule BillionSend.Transport.Httpc do
   @moduledoc """
   The default transport: OTP's `:httpc` (inets) over `:ssl`, verifying the
   server's certificate against the system's CA store. No redirects are followed.
+
+  Its state is `nil` or a keyword list:
+
+    * `cacerts: [der, ...]` - verify against these certificates instead of the
+      system's (a private CA):
+
+          BillionSend.client(transport: {BillionSend.Transport.Httpc, cacerts: my_ca_ders})
+
+    * `stream_read_timeout:` - milliseconds an event stream may stay silent before
+      the connection counts as lost (default 60 000, four times the API's keepalive)
   """
   @behaviour BillionSend.Transport
 
@@ -67,10 +77,10 @@ defmodule BillionSend.Transport.Httpc do
   @profile :billionsend
 
   @impl true
-  def request(_state, %Request{} = req) do
+  def request(state, %Request{} = req) do
     ensure_started()
 
-    with {:ok, http_options} <- http_options(req) do
+    with {:ok, http_options} <- http_options(state, req) do
       case :httpc.request(
              method(req),
              request_tuple(req),
@@ -88,11 +98,12 @@ defmodule BillionSend.Transport.Httpc do
   end
 
   @impl true
-  def open_stream(_state, %Request{} = req) do
+  def open_stream(state, %Request{} = req) do
     ensure_started()
 
-    with {:ok, ssl} <- stream_ssl(req) do
-      BillionSend.Transport.SSEConnection.open(req, ssl, max(req.timeout, @stream_read_timeout))
+    with {:ok, ssl} <- stream_ssl(state, req) do
+      read_timeout = Keyword.get(state || [], :stream_read_timeout, @stream_read_timeout)
+      BillionSend.Transport.SSEConnection.open(req, ssl, max(req.timeout, read_timeout))
     end
   end
 
@@ -103,9 +114,9 @@ defmodule BillionSend.Transport.Httpc do
   @impl true
   def close_stream(_state, conn), do: BillionSend.Transport.SSEConnection.close(conn)
 
-  defp stream_ssl(%Request{url: url}) do
+  defp stream_ssl(state, %Request{url: url}) do
     if String.starts_with?(url, "https:") do
-      with {:ok, cacerts} <- cacerts() do
+      with {:ok, cacerts} <- cacerts(state) do
         {:ok, ssl_options(url, cacerts)}
       end
     else
@@ -141,6 +152,13 @@ defmodule BillionSend.Transport.Httpc do
 
   defp method(%Request{method: m}), do: m |> String.downcase() |> String.to_existing_atom()
 
+  # :httpc refuses a POST, PUT or PATCH given as {url, headers} (`:invalid_request`):
+  # one without a body goes as an empty body with no content type.
+  defp request_tuple(%Request{method: method, url: url, headers: headers, body: nil})
+       when method in ["POST", "PUT", "PATCH"] do
+    {String.to_charlist(url), charlist_headers(headers), ~c"", ""}
+  end
+
   defp request_tuple(%Request{url: url, headers: headers, body: nil}) do
     {String.to_charlist(url), charlist_headers(headers)}
   end
@@ -168,11 +186,11 @@ defmodule BillionSend.Transport.Httpc do
     ]
   end
 
-  defp http_options(%Request{url: url, timeout: timeout}) do
+  defp http_options(state, %Request{url: url, timeout: timeout}) do
     base = [timeout: timeout, connect_timeout: timeout, autoredirect: false]
 
     if String.starts_with?(url, "https:") do
-      with {:ok, cacerts} <- cacerts() do
+      with {:ok, cacerts} <- cacerts(state) do
         ssl = ssl_options(url, cacerts)
 
         {:ok, [{:ssl, ssl} | base]}
@@ -195,18 +213,17 @@ defmodule BillionSend.Transport.Httpc do
     ]
   end
 
-  defp cacerts do
-    {:ok, :public_key.cacerts_get()}
+  defp cacerts(state) do
+    case Keyword.get(state || [], :cacerts) do
+      nil -> {:ok, :public_key.cacerts_get()}
+      list when is_list(list) -> {:ok, list}
+    end
   rescue
     error ->
       {:error,
        %APIConnectionError{
          message: "No CA certificates to verify the API with: #{Exception.message(error)}"
        }}
-  catch
-    _, reason ->
-      {:error,
-       %APIConnectionError{message: "No CA certificates to verify the API with: #{inspect(reason)}"}}
   end
 
   defp headers_map(headers) do

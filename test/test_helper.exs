@@ -1,4 +1,5 @@
-ExUnit.start()
+# The live tests (test/e2e) run only through `mix e2e`.
+ExUnit.start(exclude: [:e2e])
 
 defmodule BillionSend.Test.Helpers do
   alias BillionSend.Test.{Contract, Mock}

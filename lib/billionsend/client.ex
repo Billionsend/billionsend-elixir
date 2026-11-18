@@ -59,6 +59,8 @@ defmodule BillionSend.Client do
       raise ArgumentError, "max_retries must be 0 or more"
     end
 
+    timeout = check_timeout!(Keyword.get(opts, :timeout, @default_timeout))
+
     base_url =
       case Keyword.get(opts, :base_url) || System.get_env("BILLIONSEND_BASE_URL") do
         nil -> @default_base_url
@@ -73,14 +75,33 @@ defmodule BillionSend.Client do
       end
 
     %__MODULE__{
-      api_key: Keyword.get(opts, :api_key) || System.get_env("BILLIONSEND_API_KEY"),
+      api_key: api_key(Keyword.get(opts, :api_key)),
       base_url: base_url,
-      timeout: Keyword.get(opts, :timeout, @default_timeout),
+      timeout: timeout,
       max_retries: max_retries,
       default_headers: Enum.map(Keyword.get(opts, :default_headers, []), &string_pair/1),
       transport: transport,
       sleep: Keyword.get(opts, :sleep, &Process.sleep/1)
     }
+  end
+
+  # A key read from a file or an environment variable often ends in a newline;
+  # a blank one is no key, and the environment's is tried.
+  defp api_key(given) do
+    case {clean_key(given), clean_key(System.get_env("BILLIONSEND_API_KEY"))} do
+      {key, env} when key in [nil, ""] -> env
+      {key, _} -> key
+    end
+  end
+
+  defp clean_key(key) when is_binary(key), do: String.trim(key)
+  defp clean_key(key), do: key
+
+  defp check_timeout!(timeout) when is_integer(timeout) and timeout > 0, do: timeout
+
+  defp check_timeout!(timeout) do
+    raise ArgumentError,
+          "timeout must be a positive number of milliseconds, got #{inspect(timeout)}"
   end
 
   defimpl Inspect do
@@ -124,12 +145,15 @@ defmodule BillionSend.Client do
         url: url(client, path, Keyword.get(opts, :query)),
         headers: headers,
         body: body,
-        timeout: Keyword.get(opts, :timeout) || client.timeout
+        timeout: call_timeout!(client, Keyword.get(opts, :timeout))
       }
 
       attempt(client, req, keyed?, 0)
     end
   end
+
+  defp call_timeout!(client, nil), do: client.timeout
+  defp call_timeout!(_client, timeout), do: check_timeout!(timeout)
 
   # `:body` is sent as JSON, `:multipart` as a multipart form (see `BillionSend.Multipart`).
   defp encode_body(opts) do
@@ -138,13 +162,25 @@ defmodule BillionSend.Client do
         {nil, nil}
 
       {body, nil} ->
-        {JSON.encode!(body), "application/json"}
+        {JSON.encode!(objects(body)), "application/json"}
 
       {nil, fields} ->
         {content_type, body} = BillionSend.Multipart.encode(fields)
         {body, content_type}
     end
   end
+
+  # A keyword list is how an Elixir caller writes an object: send it as one, at any depth.
+  defp objects(list) when is_list(list) and list != [] do
+    if Keyword.keyword?(list),
+      do: Map.new(list, fn {k, v} -> {k, objects(v)} end),
+      else: Enum.map(list, &objects/1)
+  end
+
+  defp objects(map) when is_map(map) and not is_struct(map),
+    do: Map.new(map, fn {k, v} -> {k, objects(v)} end)
+
+  defp objects(other), do: other
 
   defp attempt(client, req, keyed?, n) do
     {module, state} = client.transport
@@ -227,7 +263,7 @@ defmodule BillionSend.Client do
         method: "GET",
         url: url(client, path, query),
         headers: headers,
-        timeout: timeout || client.timeout
+        timeout: call_timeout!(client, timeout)
       }
 
       case module.open_stream(state, req) do
@@ -252,9 +288,16 @@ defmodule BillionSend.Client do
     end
   end
 
-  @doc "Encodes one path segment (an id, or an inbox address such as support@example.com)."
+  @doc """
+  Encodes one path segment (an id, or an inbox address such as support@example.com).
+  `nil` and an empty string raise `ArgumentError`: left empty, the call would go to the
+  route of the whole collection.
+  """
   def encode_path(value) do
-    URI.encode(to_string(value), fn c -> URI.char_unreserved?(c) or c == ?@ end)
+    case to_string(value) do
+      "" -> raise ArgumentError, "a path parameter must not be empty (got #{inspect(value)})"
+      text -> URI.encode(text, fn c -> URI.char_unreserved?(c) or c == ?@ end)
+    end
   end
 
   @doc "Drops unset values, writes booleans as true/false and lists comma-separated in one key."
@@ -401,6 +444,7 @@ defmodule BillionSend.Client do
           |> merge(Enum.reject(Keyword.get(opts, :headers, []), fn {_, v} -> v == nil end))
           |> merge(Keyword.get(opts, :extra_headers) || [])
 
+        Enum.each(out, &check_header!/1)
         {:ok, out}
     end
   end
@@ -415,6 +459,23 @@ defmodule BillionSend.Client do
   end
 
   defp string_pair({k, v}), do: {to_string(k), to_string(v)}
+
+  # A header goes on the wire as it is: a line break would end it early (header
+  # injection) and a character outside printable ASCII is refused by the HTTP
+  # client with an error that looks like a network failure.
+  defp check_header!({name, value}) do
+    unless name =~ ~r/\A[!#$%&'*+.^_`|~0-9A-Za-z-]+\z/ do
+      raise ArgumentError, "invalid header name #{inspect(name)}"
+    end
+
+    unless value =~ ~r/\A[\t\x20-\x7E]*\z/ do
+      raise ArgumentError,
+            "the value of header #{name} must be printable ASCII without line breaks " <>
+              "(an API key and an idempotency key included)"
+    end
+
+    :ok
+  end
 
   @doc false
   def uuid4 do

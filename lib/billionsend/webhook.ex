@@ -30,6 +30,16 @@ defmodule BillionSend.Webhook do
   @spec verify(binary(), map() | [{String.t(), String.t()}], String.t(), keyword()) ::
           {:ok, map()} | {:error, WebhookVerificationError.t()}
   def verify(payload, headers, secret, opts \\ []) do
+    unless is_binary(payload) do
+      raise ArgumentError,
+            "the payload must be the request body exactly as received (a binary), " <>
+              "not parsed JSON; got #{inspect(payload, limit: 3)}"
+    end
+
+    unless is_map(headers) or is_list(headers) do
+      raise ArgumentError, "headers must be a map or a list of pairs"
+    end
+
     key = secret_key!(secret)
     tolerance = Keyword.get(opts, :tolerance, @default_tolerance)
     now = Keyword.get_lazy(opts, :now, fn -> System.os_time(:second) end)

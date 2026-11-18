@@ -66,7 +66,7 @@ defmodule BillionSend.Transport.SSEConnection do
             rest = binary_part(conn.buffer, at + 2, byte_size(conn.buffer) - at - 2)
 
             if byte_size(rest) >= size + 2 do
-              <<data::binary-size(size), _crlf::binary-2, tail::binary>> = rest
+              <<data::binary-size(^size), _crlf::binary-2, tail::binary>> = rest
               {:ok, data, %{conn | buffer: tail}}
             else
               with {:ok, conn} <- more(conn), do: next(conn)
@@ -82,7 +82,7 @@ defmodule BillionSend.Transport.SSEConnection do
 
   def next(%__MODULE__{mode: {:length, left}, buffer: buffer} = conn) when buffer != "" do
     take = min(left, byte_size(buffer))
-    <<data::binary-size(take), tail::binary>> = buffer
+    <<data::binary-size(^take), tail::binary>> = buffer
     {:ok, data, %{conn | buffer: tail, mode: {:length, left - take}}}
   end
 

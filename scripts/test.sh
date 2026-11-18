@@ -7,4 +7,7 @@ exec "$runtime" run --rm -v "$PWD:/w:Z" -w /w -e MIX_HOME=/w/_build/mix "$image"
   elixir scripts/generate.exs --check &&
   mix format --check-formatted &&
   mix compile --warnings-as-errors &&
-  mix test --warnings-as-errors'
+  mix test --warnings-as-errors --cover --export-coverage all &&
+  mix test.coverage &&
+  COVERAGE_SCOPE=generated mix test.coverage &&
+  mix run --no-start scripts/branch_coverage.exs cover/all.coverdata --threshold 95'

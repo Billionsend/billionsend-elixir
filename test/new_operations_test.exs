@@ -6,30 +6,25 @@ defmodule BillionSend.NewOperationsTest do
   alias BillionSend.Test.Mock
   alias BillionSend.Test.Mock.Call
 
-  test "usage is read in the published shape: emails.daily and emails.monthly" do
+  test "usage comes back in the published shape, unknown fields and nulls included" do
     {client, mock} = client()
-    full = BillionSend.Test.Contract.example(%{"$ref" => "#/components/schemas/UsageResponse"})
 
+    {_, _, schema} =
+      BillionSend.Test.Contract.Operation.success(
+        BillionSend.Test.Contract.operation("GET", "/usage")
+      )
+
+    # What the API answers, with a field added since and a limit that is null (no limit).
     published =
-      full
-      |> put_in(["emails", "daily", "limit"], 100)
-      |> put_in(["emails", "monthly", "used"], 340)
+      schema
+      |> BillionSend.Test.Contract.example()
+      |> Map.put("added_since", %{"a" => [1, nil]})
       |> put_in(["contacts", "limit"], nil)
 
     Mock.respond(mock, "GET", "/usage", 200, json: published)
-
     assert {:ok, answer} = BillionSend.Usage.get(client)
-    assert get_in(answer, ["emails", "daily", "limit"]) == 100
-    assert get_in(answer, ["emails", "monthly", "used"]) == 340
-    assert answer["contacts"]["limit"] == nil
-  end
-
-  test "an answer in the old usage shape is not the contract" do
-    {_client, mock} = client()
-
-    assert_raise ExUnit.AssertionError, ~r/does not match the contract/, fn ->
-      Mock.respond(mock, "GET", "/usage", 200, json: %{"limits" => %{"emails_per_day" => 100}})
-    end
+    assert answer == JSON.decode!(JSON.encode!(published))
+    assert Map.keys(answer["emails"]) |> Enum.sort() |> Enum.member?("daily")
   end
 
   test "the two removed operations are gone and the replacement is there" do
@@ -117,6 +112,50 @@ defmodule BillionSend.NewOperationsTest do
                BillionSend.Contacts.Imports.create(client, %{file: {"c.csv", "Email\r\n"}})
 
       assert length(Mock.calls(mock)) == 1
+    end
+  end
+
+  describe "Multipart" do
+    test "every kind of value, in the order given, with nil left out" do
+      {type, body} =
+        Multipart.encode([
+          {:a, "text"},
+          {"b", 12},
+          {:c, true},
+          {:d, nil},
+          {:e, %{k: [1, 2]}},
+          {:f, ["x"]},
+          {:g, {"f.txt", ["io", ~c"data"]}}
+        ])
+
+      assert "multipart/form-data; boundary=" <> boundary = type
+
+      parts =
+        body |> String.split("--" <> boundary) |> Enum.drop(1) |> Enum.reject(&(&1 == "--\r\n"))
+
+      assert length(parts) == 6
+
+      assert Enum.at(parts, 0) =~ ~s(name="a"\r\n\r\ntext\r\n)
+      assert Enum.at(parts, 1) =~ ~s(name="b"\r\n\r\n12\r\n)
+      assert Enum.at(parts, 2) =~ ~s(name="c"\r\n\r\ntrue\r\n)
+      assert Enum.at(parts, 3) =~ ~s(name="e"\r\n\r\n{"k":[1,2]}\r\n)
+      assert Enum.at(parts, 4) =~ ~s(name="f"\r\n\r\n["x"]\r\n)
+
+      assert Enum.at(parts, 5) =~
+               ~s(name="g"; filename="f.txt"\r\nContent-Type: application/octet-stream\r\n\r\niodata\r\n)
+    end
+
+    test "a non-ASCII file name stays UTF-8 and every boundary is new" do
+      {t1, body} = Multipart.encode(%{file: {"\u8054\u7cfb\u4eba \u00e9.csv", "x", "text/csv"}})
+      {t2, _} = Multipart.encode(%{file: {"a.csv", "x"}})
+      assert body =~ ~s(filename="\u8054\u7cfb\u4eba \u00e9.csv")
+      assert t1 != t2
+    end
+
+    test "a content type cannot carry a line break" do
+      {_, body} = Multipart.encode(%{file: {"a.csv", "x", "text/csv\r\nX-Evil: 1"}})
+      assert body =~ "Content-Type: text/csvX-Evil: 1\r\n"
+      refute body =~ "\r\nX-Evil"
     end
   end
 end

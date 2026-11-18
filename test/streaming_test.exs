@@ -29,6 +29,54 @@ defmodule BillionSend.SSEDecoderTest do
     assert d.retry_ms == 2500
     assert event.event == "message"
   end
+
+  defp feed_all(chunks) do
+    Enum.reduce(chunks, {[], SSEDecoder.new()}, fn chunk, {acc, d} ->
+      {events, d} = SSEDecoder.feed(d, chunk)
+      {acc ++ events, d}
+    end)
+  end
+
+  test "a CRLF split between two chunks is one line ending" do
+    {events, _} = feed_all(["id: 1\r", "\ndata: {}\r", "\n\r", "\n"])
+    assert [%{id: "1", data: %{}}] = events
+  end
+
+  test "an id carries over to the events after it, and a NUL in an id ignores it" do
+    {events, d} = feed_all(["id: a\ndata: 1\n\ndata: 2\n\nid: b\0c\ndata: 3\n\n"])
+    assert Enum.map(events, & &1.id) == ["a", "a", "a"]
+    assert d.last_event_id == "a"
+  end
+
+  test "an id with no data moves the position without making an event" do
+    {events, d} = feed_all(["id: 9\n\n"])
+    assert events == []
+    assert d.last_event_id == "9"
+  end
+
+  test "the event name is for one event only, a retry that is not a number is ignored" do
+    {events, d} = feed_all(["event: a\ndata: 1\n\ndata: 2\n\nretry: soon\nretry: 1x\n"])
+    assert Enum.map(events, & &1.event) == ["a", "message"]
+    assert d.retry_ms == nil
+  end
+
+  test "comments, unknown fields and a missing colon are skipped or empty" do
+    {events, _} = feed_all([": hi\nunknown: x\ndata\ndata:  two spaces\n\n"])
+    assert [%{data: data}] = events
+    # `data` alone is an empty line, and only one leading space of a value is dropped.
+    assert data == "\n two spaces"
+  end
+
+  test "data that is not JSON stays text, empty data is an empty text" do
+    {events, _} = feed_all(["data: not json\n\ndata:\n\n"])
+    assert Enum.map(events, & &1.data) == ["not json", ""]
+  end
+
+  test "a byte order mark is dropped from the start of the stream only" do
+    {events, _} = feed_all(["\uFEFFid: 1\ndata: {}\n\n", "\uFEFFid: 2\ndata: {}\n\n"])
+    # The second mark is part of a field name, so its id line is not an id line.
+    assert Enum.map(events, & &1.id) == ["1", "1"]
+  end
 end
 
 defmodule BillionSend.EventStreamTest do
@@ -248,5 +296,115 @@ defmodule BillionSend.EventStreamTest do
     end
 
     assert_received :event
+  end
+
+  defp saw_event(id), do: frame(id, "inbox.email.received")
+
+  test "a position sent alone is where a dropped connection resumes from" do
+    {client, mock} = client()
+    answer(mock, @team, ["id: 5\n\n"], %BillionSend.APIConnectionError{message: "reset"})
+    answer(mock, @team, [frame("6", "inbox.email.received")])
+    {:ok, stream} = BillionSend.Inboxes.Events.stream(client)
+    assert [%{id: "6"}] = Enum.take(stream, 1)
+    assert Enum.map(Mock.calls(mock), &Call.header(&1, "last-event-id")) == [nil, "5"]
+  end
+
+  test "a position sent alone is where a connection that ends cleanly resumes from, too" do
+    {client, mock} = client()
+    answer(mock, @team, ["retry: 400\nid: 5\n\n"])
+    answer(mock, @team, [frame("6", "inbox.email.received")])
+    {:ok, stream} = BillionSend.Inboxes.Events.stream(client)
+    assert [%{id: "6"}] = Enum.take(stream, 1)
+    assert Enum.map(Mock.calls(mock), &Call.header(&1, "last-event-id")) == [nil, "5"]
+    assert sleeps() == [400]
+  end
+
+  test "a retry the server asked for before a drop is the wait before reconnecting" do
+    {client, mock} = client()
+    answer(mock, @team, ["retry: 700\n\n"], %BillionSend.APIConnectionError{message: "reset"})
+    answer(mock, @team, [frame("1", "inbox.email.received")])
+    {:ok, stream} = BillionSend.Inboxes.Events.stream(client)
+    assert [%{id: "1"}] = Enum.take(stream, 1)
+    assert sleeps() == [700]
+  end
+
+  test "an event that is not what the stream carries raises instead of being skipped" do
+    for chunk <- [
+          "id: 1\nevent: inbox.email.received\ndata: [1]\n\n",
+          "id: 1\nevent: inbox.email.received\ndata: text\n\n",
+          "event: inbox.email.received\ndata: {}\n\n"
+        ] do
+      {client, mock} = client()
+      answer(mock, @team, [chunk])
+      {:ok, stream} = BillionSend.Inboxes.Events.stream(client)
+      error = assert_raise BillionSend.Error, fn -> Enum.to_list(stream) end
+      assert error.message =~ "Malformed"
+    end
+  end
+
+  test "a gap with no reason says so, and a gap at a new position is handed out again" do
+    {client, mock} = client()
+    gap = "event: stream.gap\ndata: {}\n\n"
+    answer(mock, @team, [gap, frame("1", "inbox.email.received")])
+    answer(mock, @team, [gap, frame("2", "inbox.email.received")])
+    {:ok, stream} = BillionSend.Inboxes.Events.stream(client)
+    got = Enum.take(stream, 4)
+
+    assert [
+             %StreamGapEvent{data: %{"reason" => "unknown"}},
+             %{id: "1"},
+             %StreamGapEvent{},
+             %{id: "2"}
+           ] = got
+  end
+
+  test "the team's stream goes on after an inbox is deleted, one inbox's ends and ignores what follows" do
+    {client, mock} = client()
+    answer(mock, @team, [frame("1", "inbox.deleted"), frame("2", "inbox.email.received")])
+    {:ok, stream} = BillionSend.Inboxes.Events.stream(client)
+    assert Enum.map(Enum.take(stream, 2), & &1.id) == ~w(1 2)
+
+    {client, mock} = client()
+    answer(mock, @inbox, [frame("1", "inbox.expired") <> frame("2", "inbox.email.received")])
+    {:ok, stream} = BillionSend.Inboxes.Events.stream_inbox(client, "ib_1")
+    assert Enum.map(stream, & &1.id) == ["1"]
+    assert length(Mock.calls(mock)) == 1
+    assert Mock.streams_closed?(mock)
+  end
+
+  test "reconnect settings are checked when the stream is opened" do
+    {client, _} = client()
+
+    for bad <- [-1, 1.5, "5", nil] do
+      assert_raise ArgumentError, ~r/max_reconnects/, fn ->
+        BillionSend.Inboxes.Events.stream(client, max_reconnects: bad)
+      end
+    end
+  end
+
+  test "a name or a list of names narrows the stream, the key and headers travel with it" do
+    {client, mock} = client(timeout: 4_321)
+    answer(mock, @team, [])
+    answer(mock, @team, [])
+
+    {:ok, _} =
+      BillionSend.Inboxes.Events.stream(client,
+        types: "inbox.email.received",
+        extra_headers: [{"x-trace", "t"}]
+      )
+
+    {:ok, _} = BillionSend.Inboxes.Events.stream(client, types: ["a", "b"], timeout: 99)
+    [one, two] = Mock.calls(mock)
+    assert one.query == %{"types" => ["inbox.email.received"]}
+    assert two.query == %{"types" => ["a,b"]}
+    assert Call.header(one, "x-trace") == "t"
+    assert Enum.map([one, two], & &1.request.timeout) == [4_321, 99]
+    assert Call.header(one, "authorization") == "Bearer " <> BillionSend.Test.Contract.api_key()
+  end
+
+  test "stream! hands out the stream itself" do
+    {client, mock} = client()
+    answer(mock, @team, [saw_event("1")])
+    assert [%{id: "1"}] = client |> BillionSend.Inboxes.Events.stream!() |> Enum.take(1)
   end
 end
