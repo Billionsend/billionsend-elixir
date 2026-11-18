@@ -47,6 +47,7 @@ defmodule BillionSend.Test.Live do
           log: [],
           violations: [],
           consecutive_429: 0,
+          suppressed: MapSet.new(),
           created: [],
           leftovers: []
         }
@@ -118,6 +119,81 @@ defmodule BillionSend.Test.Live do
 
   def strip_text(list) when is_list(list), do: Enum.map(list, &strip_text/1)
   def strip_text(other), do: other
+
+  # --- the two safety rules on mail ---------------------------------------------------------
+
+  @simulator ~r/\Asuccess(\+[a-z0-9._-]+)?@simulator\.amazonses\.com\z/
+
+  @doc """
+  Checks a request against the two rules on mail, before anything is sent:
+
+    1. a recipient (`to`, `cc`, `bcc`, in a body or in each body of a batch) is
+       `success@simulator.amazonses.com` or a plus-alias of it, nothing else;
+    2. an address the run has put on the suppression list (a suppression created
+       or added in a batch) is never a recipient: mail to it would make the
+       platform announce `email.suppressed` to the account's real webhook.
+
+  Returns `{:ok, suppressed}` with the addresses suppressed so far (this request's
+  included), or `{:error, reason}`.
+  """
+  def guard(suppressed, %Request{body: nil}), do: {:ok, suppressed}
+
+  def guard(suppressed, %Request{} = req) do
+    case json_body(req) do
+      nil ->
+        {:ok, suppressed}
+
+      body ->
+        suppressed = MapSet.union(suppressed, suppressions_in(req, body))
+        bodies = if is_list(body), do: body, else: [body]
+        recipients = for %{} = b <- bodies, key <- ~w(to cc bcc), r <- addresses(b[key]), do: r
+
+        cond do
+          bad = Enum.find(recipients, &(not Regex.match?(@simulator, &1))) ->
+            {:error,
+             "a recipient that is not success@simulator.amazonses.com or a plus-alias of it: #{bad}"}
+
+          bad = Enum.find(recipients, &MapSet.member?(suppressed, &1)) ->
+            {:error, "a recipient that is on the suppression list the run made: #{bad}"}
+
+          true ->
+            {:ok, suppressed}
+        end
+    end
+  end
+
+  defp json_body(%Request{headers: headers, body: body}) do
+    type =
+      Enum.find_value(headers, "", fn {k, v} -> if String.downcase(k) == "content-type", do: v end)
+
+    if String.starts_with?(type, "application/json"), do: JSON.decode!(body)
+  end
+
+  defp suppressions_in(%Request{method: "POST", url: url}, body) do
+    case URI.parse(url).path do
+      "/suppressions" -> MapSet.new(addresses(body["email"]))
+      "/suppressions/batch/add" -> MapSet.new(addresses(body["emails"]))
+      _ -> MapSet.new()
+    end
+  end
+
+  defp suppressions_in(_, _), do: MapSet.new()
+
+  # "Name <a@b>", "a@b" or a list of them, as lower-case bare addresses.
+  defp addresses(nil), do: []
+  defp addresses(list) when is_list(list), do: Enum.flat_map(list, &addresses/1)
+
+  defp addresses(text) when is_binary(text) do
+    bare =
+      case Regex.run(~r/<([^>]*)>/, text, capture: :all_but_first) do
+        [inner] -> inner
+        nil -> text
+      end
+
+    [bare |> String.trim() |> String.downcase()]
+  end
+
+  defp addresses(_), do: []
 
   # --- violations ---------------------------------------------------------------------------
 
@@ -193,6 +269,8 @@ defmodule BillionSend.Test.Live do
   def request(agent, %Request{} = req), do: request(agent, req, true)
 
   defp request(agent, %Request{} = req, check?) do
+    guard!(agent, req)
+
     # A request the contract refuses is never sent. (The key it carries is the client's
     # own: a test may use another one, a made-up or a restricted key.)
     key =
@@ -226,6 +304,13 @@ defmodule BillionSend.Test.Live do
   def close_stream(_agent, _handle), do: :ok
 
   # At least a second after the previous request started, and 150 requests at most.
+  defp guard!(agent, req) do
+    case guard(Agent.get(agent, & &1.suppressed), req) do
+      {:ok, suppressed} -> Agent.update(agent, &%{&1 | suppressed: suppressed})
+      {:error, reason} -> raise "refused before sending: #{reason}"
+    end
+  end
+
   defp throttle(agent) do
     decision =
       Agent.get_and_update(agent, fn s ->

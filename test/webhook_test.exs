@@ -236,14 +236,36 @@ defmodule BillionSend.WebhookTest do
 
       for bad <- [
             "whsec_",
-            @whsec <> "\n",
-            " " <> @whsec,
+            "x" <> @whsec,
             String.replace(@whsec, "=", ""),
             String.replace(@whsec, ~r/.=\z/, "t="),
             nil,
             5
           ] do
         assert_raise ArgumentError, fn -> BillionSend.verify_webhook(body, signed(body), bad) end
+      end
+    end
+
+    test "whitespace around the secret, a header value or between signatures does not matter" do
+      body = ~s({"a":1})
+      headers = signed(body)
+      [_, sig] = String.split(headers["webhook-signature"], ",")
+
+      for secret <- [@whsec <> "\n", "  " <> @whsec <> "\r\n", "\t" <> @whsec] do
+        assert {:ok, _} = BillionSend.verify_webhook(body, headers, secret)
+      end
+
+      padded = Map.new(headers, fn {k, v} -> {k, "  " <> v <> "\r\n"} end)
+      assert {:ok, _} = BillionSend.verify_webhook(body, padded, @whsec)
+
+      for list <- [
+            "v1,AAAA\tv1,#{sig}",
+            "v1,AAAA\n v1,#{sig}",
+            "\nv1,#{sig}\n",
+            "v1,AAAA   \t  v1,#{sig}"
+          ] do
+        assert {:ok, _} =
+                 BillionSend.verify_webhook(body, %{headers | "webhook-signature" => list}, @whsec)
       end
     end
 

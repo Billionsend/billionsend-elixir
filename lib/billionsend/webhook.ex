@@ -40,7 +40,7 @@ defmodule BillionSend.Webhook do
       raise ArgumentError, "headers must be a map or a list of pairs"
     end
 
-    key = secret_key!(secret)
+    key = secret_key!(if is_binary(secret), do: String.trim(secret), else: secret)
     tolerance = Keyword.get(opts, :tolerance, @default_tolerance)
     now = Keyword.get_lazy(opts, :now, fn -> System.os_time(:second) end)
 
@@ -93,7 +93,7 @@ defmodule BillionSend.Webhook do
 
     matched =
       signatures
-      |> String.split(" ")
+      |> String.split()
       |> Enum.any?(fn candidate ->
         with ["v1", encoded] when encoded != "" <- String.split(candidate, ",", parts: 2),
              {:ok, given} <- Base.decode64(encoded),
@@ -129,8 +129,9 @@ defmodule BillionSend.Webhook do
     Enum.find_value(headers, fn {key, value} ->
       value = if is_list(value), do: List.first(value), else: value
 
-      if String.downcase(to_string(key)) == name and value not in [nil, ""],
-        do: to_string(value)
+      value = if value == nil, do: nil, else: value |> to_string() |> String.trim()
+
+      if String.downcase(to_string(key)) == name and value not in [nil, ""], do: value
     end)
   end
 end

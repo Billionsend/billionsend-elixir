@@ -52,7 +52,7 @@ client = BillionSend.client(api_key: signup["api_key"])
 
 ## Sending once
 
-Every sending function (`Emails.send`, `Emails.batch`, `Emails.Receiving.reply` and `.forward`, `Inboxes.send`, `Inboxes.Threads.Emails.reply` and `.forward`, `Inboxes.Drafts.send`) sends an `Idempotency-Key`. Without `idempotency_key:` the call makes up one (a UUID) and reuses it for its own retries, so a retry after a dropped connection never sends the email twice. Pass your own key to stay safe across calls too, for example when a job that sends may run again:
+Every sending function (`Emails.send`, `Emails.batch`, `Emails.Receiving.reply` and `.forward`, `Inboxes.send`, `Inboxes.Threads.Emails.reply` and `.forward`, `Inboxes.Drafts.send`, `Events.send`) sends an `Idempotency-Key`. Without `idempotency_key:` the call makes up one (a UUID) and reuses it for its own retries, so a retry after a dropped connection never sends the email twice. Pass your own key to stay safe across calls too, for example when a job that sends may run again:
 
 ```elixir
 BillionSend.Emails.send(client, message, idempotency_key: "welcome/#{user.id}")
@@ -75,7 +75,9 @@ answer = fn question -> "Thanks, we got your message:\n\n> #{question}" end  # y
 {:ok, events} = Inboxes.Events.stream_inbox(client, inbox["id"], types: "inbox.email.received")
 
 events
-|> Stream.filter(&match?(%InboxStreamEvent{}, &1))  # a StreamGapEvent: see below
+# A StreamGapEvent: see below. An inbox's own stream also carries inbox.deleted and
+# inbox.expired whatever `types:` says, so keep only the mail.
+|> Stream.filter(&match?(%InboxStreamEvent{event: "inbox.email.received"}, &1))
 |> Enum.each(fn %InboxStreamEvent{data: %{"data" => data}} ->
   %{"thread_id" => thread_id, "email_id" => email_id} = data
   {:ok, email} = Inboxes.Threads.Emails.get(client, inbox["id"], thread_id, email_id)
@@ -98,7 +100,7 @@ Waiting for a sign-in code sent to the inbox is one call: `BillionSend.Inboxes.C
 - `BillionSend.InboxStreamEvent`: `id` (the stream position), `event` (such as `"inbox.email.received"`) and `data`, a map with `"type"`, `"created_at"`, `"inbox_id"` and `"data"` (the webhook payload of the same event).
 - `BillionSend.StreamGapEvent`: `event: "stream.gap"`, `id: nil`, and `data["reason"]` says why. The stream was resumed from a position older than the 24 hours the API replays, so some events may be missing: catch up through the lists (`BillionSend.Inboxes.Threads.list_all(client, inbox_id, read: false)`) before going on. It is handed out once per position.
 
-The server ends a stream every few minutes and connections drop; the stream reconnects on its own with `Last-Event-ID`, so no event is lost or repeated. Before reconnecting it waits a second (or what the server's `retry` field asks). A connection that opens starts the count again, so a quiet inbox that gets only keepalives keeps its stream however long it waits; A reconnect the API answers with a 429 or 5xx waits what its `Retry-After` asks (one over 60 seconds raises that error at once). `max_reconnects:` (default 5) bounds the reconnects in a row that fail to open: past it, the enumeration raises the API's error for the last one (`BillionSend.RateLimitError`, `BillionSend.APIError`), or `BillionSend.APIConnectionError` ("gave up after N reconnects") when it got no answer. A reconnect the API refuses for good, such as a revoked key, raises its own error. One inbox's stream ends after that inbox's `inbox.deleted` or `inbox.expired` event. Enumerate a stream once, in the process that opened it; halting the enumeration (`Enum.take/2`, `Stream.take_while/2`, a `throw` out of the loop) closes the connection.
+The server ends a stream every few minutes and connections drop; the stream reconnects on its own with `Last-Event-ID`, so no event is lost or repeated. Before reconnecting it waits a second (or what the server's `retry` field asks). A connection that opens starts the count again, so a quiet inbox that gets only keepalives keeps its stream however long it waits; A reconnect the API answers with a 429 or 5xx waits what its `Retry-After` asks (one over 60 seconds raises that error at once). `max_reconnects:` (default 5) bounds the reconnects in a row that fail to open: past it, the enumeration raises the API's error for the last one (`BillionSend.RateLimitError`, `BillionSend.APIError`), or `BillionSend.APIConnectionError` ("gave up after N reconnects") when it got no answer. A reconnect the API refuses for good, such as a revoked key, raises its own error. One inbox's stream always carries that inbox's `inbox.deleted` and `inbox.expired` events, whatever `types:` names, and ends after one of them. Enumerate a stream once, in the process that opened it; halting the enumeration (`Enum.take/2`, `Stream.take_while/2`, a `throw` out of the loop) closes the connection.
 
 To pick up where a process left off, keep the `id` of the last `InboxStreamEvent` you handled and pass it back:
 

@@ -337,6 +337,19 @@ defmodule BillionSend.ClientOptionsTest do
       assert Mock.calls(mock) == []
     end
 
+    test "an id that is a dot segment is refused: it would be folded into another route" do
+      {client, mock} = client()
+
+      for id <- [".", ".."] do
+        assert_raise ArgumentError, ~r/dot segment/, fn -> BillionSend.Domains.get(client, id) end
+      end
+
+      # Dots inside an id are fine.
+      {:ok, _} = BillionSend.Inboxes.get(client, "a.b..c@example.com")
+      {:ok, _} = BillionSend.Inboxes.get(client, "...")
+      assert length(Mock.calls(mock)) == 2
+    end
+
     test "every reserved or non-ASCII character is percent-encoded, @ is kept" do
       {client, mock} = client()
       {:ok, _} = BillionSend.Inboxes.get(client, "a+b@x.com é/?#%")
@@ -357,7 +370,9 @@ defmodule BillionSend.ClientOptionsTest do
 
       assert BillionSend.Client.encode_query(%{"é" => "ü"}) == "%C3%A9=%C3%BC"
       assert BillionSend.Client.encode_query([]) == ""
-      assert BillionSend.Client.encode_query(l: []) == "l="
+      # An empty list is no filter: it is not sent at all.
+      assert BillionSend.Client.encode_query(l: [], m: ["a"]) == "m=a"
+      assert BillionSend.Client.encode_query(l: []) == ""
     end
   end
 

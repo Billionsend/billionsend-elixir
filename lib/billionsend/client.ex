@@ -290,20 +290,26 @@ defmodule BillionSend.Client do
 
   @doc """
   Encodes one path segment (an id, or an inbox address such as support@example.com).
-  `nil` and an empty string raise `ArgumentError`: left empty, the call would go to the
-  route of the whole collection.
+  `nil`, an empty string and `.` or `..` raise `ArgumentError`: left empty, the call would
+  go to the route of the whole collection, and a dot segment is folded into another route.
   """
   def encode_path(value) do
     case to_string(value) do
-      "" -> raise ArgumentError, "a path parameter must not be empty (got #{inspect(value)})"
-      text -> URI.encode(text, fn c -> URI.char_unreserved?(c) or c == ?@ end)
+      "" ->
+        raise ArgumentError, "a path parameter must not be empty (got #{inspect(value)})"
+
+      dots when dots in [".", ".."] ->
+        raise ArgumentError, "a path parameter must not be a dot segment (got #{inspect(value)})"
+
+      text ->
+        URI.encode(text, fn c -> URI.char_unreserved?(c) or c == ?@ end)
     end
   end
 
-  @doc "Drops unset values, writes booleans as true/false and lists comma-separated in one key."
+  @doc "Drops unset values and empty lists, writes booleans as true/false and lists comma-separated in one key."
   def encode_query(query) do
     query
-    |> Enum.reject(fn {_, v} -> v == nil end)
+    |> Enum.reject(fn {_, v} -> v == nil or v == [] end)
     |> Enum.map(fn
       {k, v} when is_list(v) -> {to_string(k), Enum.map_join(v, ",", &query_text/1)}
       {k, v} -> {to_string(k), query_text(v)}

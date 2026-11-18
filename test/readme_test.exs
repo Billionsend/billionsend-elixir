@@ -79,6 +79,19 @@ defmodule BillionSend.ReadmeTest do
     assert first_lines == @handled
   end
 
+  test "the README names every operation that sends an Idempotency-Key" do
+    readme = File.read!(@readme)
+    [paragraph] = Regex.run(~r/Every sending function \(.*?\) sends an `Idempotency-Key`/s, readme)
+
+    for op <- Contract.operations(), Operation.idempotency_key?(op) do
+      {module, name} = Requests.target(op)
+      short = module |> Module.split() |> tl() |> Enum.join(".")
+
+      assert paragraph =~ "#{short}.#{name}`" or paragraph =~ "and `.#{name}`",
+             "the README's list of sending functions leaves out #{short}.#{name}"
+    end
+  end
+
   test "the install snippet asks for a version this package satisfies" do
     [_, requirement] = Regex.run(~r/\{:billionsend, "([^"]+)"\}/, block("def deps do"))
     assert Version.match?(BillionSend.version(), requirement)
@@ -152,7 +165,9 @@ defmodule BillionSend.ReadmeTest do
       headers: [{"content-type", "text/event-stream"}],
       chunks: [
         ": keepalive\n\n",
-        "id: 10\nevent: inbox.email.received\ndata: #{JSON.encode!(data)}\n\n"
+        "id: 10\nevent: inbox.email.received\ndata: #{JSON.encode!(data)}\n\n",
+        # Sent whatever `types:` says; it carries no thread_id, and it ends the stream.
+        "id: 11\nevent: inbox.deleted\ndata: #{JSON.encode!(%{"type" => "inbox.deleted", "created_at" => "2026-11-19T00:01:00.000Z", "inbox_id" => inbox["id"], "data" => %{}})}\n\n"
       ],
       error: :hold
     )
@@ -168,7 +183,8 @@ defmodule BillionSend.ReadmeTest do
     reply =
       wait_for(mock, "POST", "/inboxes/{inbox_id}/threads/{thread_id}/emails/{email_id}/reply")
 
-    Task.shutdown(task, :brutal_kill)
+    # The deleted inbox ends the stream; the example reads past that event without crashing.
+    assert {_, _} = Task.await(task, 5_000)
 
     assert reply.path_params == %{
              "inbox_id" => inbox["id"],
