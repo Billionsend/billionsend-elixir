@@ -226,6 +226,22 @@ defmodule BillionSend.RetriesTest do
     assert length(Mock.calls(mock)) == 1
   end
 
+  test "a 429 is retried for a POST without a key and for a PATCH, a 503 is not" do
+    {client, mock} = client()
+
+    Mock.error(mock, "POST", "/domains", 429, "rate_limit_exceeded", "Slow down",
+      headers: [{"retry-after", "2"}]
+    )
+
+    assert {:ok, _} = BillionSend.Domains.create(client, %{name: "acme.com"})
+    assert sleeps() == [2000]
+
+    {client, mock} = client()
+    Mock.error(mock, "PATCH", "/domains/{id}", 429, "rate_limit_exceeded", "Slow down")
+    assert {:ok, _} = BillionSend.Domains.update(client, id(), %{open_tracking: true})
+    assert length(Mock.calls(mock)) == 2
+  end
+
   test "a lost connection on a POST without a key is not retried" do
     {client, mock} = client()
     Mock.fail(mock, "POST", "/domains", %BillionSend.APIConnectionError{message: "reset"})

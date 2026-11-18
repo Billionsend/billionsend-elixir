@@ -248,6 +248,21 @@ defmodule BillionSend.OperationsTest do
           end
         end
 
+        test "a 429 is retried for every method, after its Retry-After: it was refused before anything was written" do
+          op = op({unquote(method), unquote(path)})
+          {client, mock} = client()
+          r = Requests.build(op, :minimal)
+
+          Mock.error(mock, op.method, op.path, 429, "rate_limit_exceeded", "Slow down",
+            headers: [{"retry-after", "3"}]
+          )
+
+          expected = queue_answer(mock, op)
+          assert Requests.call(client, r) == expected
+          assert length(Mock.calls(mock)) == 2
+          assert sleeps() == [3000]
+        end
+
         test "an idempotent send waits out a first attempt that is still running" do
           op = op({unquote(method), unquote(path)})
 

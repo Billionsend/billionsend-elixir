@@ -15,6 +15,7 @@ The SDK follows the published API again: the OpenAPI snapshot it is built from h
 - A key with whitespace around it (a trailing newline from a file) is trimmed; a header value that is not printable ASCII (an idempotency key with non-ASCII text, a line break) raises `ArgumentError` before sending instead of surfacing as a retried connection error; a `nil` or empty path parameter raises `ArgumentError` instead of calling the whole collection (`Domains.get(client, "")` returned the list); a `timeout:` that is not a positive integer raises instead of being ignored; a keyword list as a request body is sent as an object; `verify_webhook` with a payload that is not the raw body raises an `ArgumentError` that says so.
 - `BillionSend.Transport.Httpc` takes `cacerts:` (verify against your own CA) and `stream_read_timeout:` in its state.
 - No more compile warnings on Elixir 1.20.
+- A 429 is retried for every method, after its `Retry-After`: the API refuses before it writes anything, so a POST or PATCH without a key is safe to repeat (it was returned at once).
 - A path parameter that is `.` or `..` raises `ArgumentError` (it would be folded into another route); an empty list in a query is not sent; `verify_webhook` accepts a secret with whitespace around it, header values with whitespace and signatures separated by any whitespace.
 - README: the agent example keeps only `inbox.email.received` (an inbox's own stream also carries `inbox.deleted` and `inbox.expired` whatever `types:` says), and the list of sending functions includes `Events.send`.
 

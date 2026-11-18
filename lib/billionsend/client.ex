@@ -211,18 +211,22 @@ defmodule BillionSend.Client do
   @doc false
   # Seconds to wait before retrying after `error`, or nil to return it.
   #
-  # Retried: requests that are safe to repeat (GET, PUT, DELETE, or any request
-  # with an idempotency key) failing with 429, 5xx or no answer at all, and a
-  # keyed request whose first attempt is still running (409
-  # concurrent_idempotent_requests).
+  # Retried: any request answered 429 (the API refuses before it writes anything);
+  # requests that are safe to repeat (GET, PUT, DELETE, or any request with an
+  # idempotency key) failing with 5xx or no answer at all; and a keyed request
+  # whose first attempt is still running (409 concurrent_idempotent_requests).
   def retry_delay(client, n, error, method, keyed?) do
     cond do
       n >= client.max_retries -> nil
-      method not in @idempotent_methods and not keyed? -> nil
+      method not in @idempotent_methods and not keyed? and not rate_limited?(error) -> nil
       not retryable?(error, keyed?) -> nil
       true -> hinted_or_backoff(error, n)
     end
   end
+
+  # A 429 is the API refusing the request before it did anything: repeating it is safe for any method.
+  defp rate_limited?(%{status_code: 429}), do: true
+  defp rate_limited?(_), do: false
 
   defp retryable?(%module{}, _)
        when module in [BillionSend.APIConnectionError, BillionSend.APITimeoutError],

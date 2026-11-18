@@ -217,7 +217,7 @@ An answer that is not JSON keeps the same shape, with `name` set to `"applicatio
 
 ## Retries
 
-A request is retried when repeating it is safe: GET, PUT and DELETE, and any request carrying an idempotency key (every send does). It is retried on 429, on 5xx, when no answer came back (connection failure, timeout), and, for a keyed request, on 409 `concurrent_idempotent_requests` (a retry that caught the first attempt still running). The wait is the answer's `Retry-After` when there is one, otherwise exponential backoff with jitter (0.5 s, 1 s, 2 s… up to 8 s). An answer asking to wait more than 60 seconds, such as a used-up daily quota, is returned at once. `max_retries:` (default 2) bounds the retries of one call; `0` turns them off. The calling process sleeps between attempts.
+A 429 is retried for every method: the API refuses before it writes anything. Otherwise a request is retried when repeating it is safe: GET, PUT and DELETE, and any request carrying an idempotency key (every send does), on 5xx, when no answer came back (connection failure, timeout), and, for a keyed request, on 409 `concurrent_idempotent_requests` (a retry that caught the first attempt still running). The wait is the answer's `Retry-After` when there is one, otherwise exponential backoff with jitter (0.5 s, 1 s, 2 s… up to 8 s). An answer asking to wait more than 60 seconds, such as a used-up daily quota, is returned at once. `max_retries:` (default 2) bounds the retries of one call; `0` turns them off. The calling process sleeps between attempts.
 
 ## Configuration
 

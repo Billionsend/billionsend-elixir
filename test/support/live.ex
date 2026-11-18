@@ -139,15 +139,12 @@ defmodule BillionSend.Test.Live do
   def guard(suppressed, %Request{body: nil}), do: {:ok, suppressed}
 
   def guard(suppressed, %Request{} = req) do
-    case json_body(req) do
-      nil ->
-        {:ok, suppressed}
+    with {:ok, body} <- json_body(req) do
+      suppressed = MapSet.union(suppressed, suppressions_in(req, body))
+      bodies = if is_list(body), do: body, else: [body]
 
-      body ->
-        suppressed = MapSet.union(suppressed, suppressions_in(req, body))
-        bodies = if is_list(body), do: body, else: [body]
-        recipients = for %{} = b <- bodies, key <- ~w(to cc bcc), r <- addresses(b[key]), do: r
-
+      with :ok <- all_objects(bodies),
+           {:ok, recipients} <- recipients(bodies) do
         cond do
           bad = Enum.find(recipients, &(not Regex.match?(@simulator, &1))) ->
             {:error,
@@ -159,15 +156,56 @@ defmodule BillionSend.Test.Live do
           true ->
             {:ok, suppressed}
         end
+      end
     end
   end
 
-  defp json_body(%Request{headers: headers, body: body}) do
+  # A body that cannot be read cannot be checked, so it is not sent (a file upload is the
+  # one body that is not JSON; it has no recipients).
+  defp json_body(%Request{headers: headers, body: body, url: url}) do
     type =
       Enum.find_value(headers, "", fn {k, v} -> if String.downcase(k) == "content-type", do: v end)
 
-    if String.starts_with?(type, "application/json"), do: JSON.decode!(body)
+    cond do
+      String.starts_with?(type, "multipart/form-data") and
+          URI.parse(url).path == "/contacts/imports" ->
+        {:ok, %{}}
+
+      String.starts_with?(type, "application/json") ->
+        case JSON.decode(body) do
+          {:ok, json} ->
+            {:ok, json}
+
+          {:error, _} ->
+            {:error, "a body that is not valid JSON, so its recipients cannot be checked"}
+        end
+
+      true ->
+        {:error, "a body of type #{inspect(type)}, which cannot be checked for recipients"}
+    end
   end
+
+  defp all_objects(bodies) do
+    if Enum.all?(bodies, &is_map/1),
+      do: :ok,
+      else:
+        {:error,
+         "a body that is not an object (or a list of objects), so its recipients cannot be checked"}
+  end
+
+  # Every recipient must be text (or a list of text); anything else is refused, not skipped.
+  defp recipients(bodies) do
+    values = for b <- bodies, key <- ~w(to cc bcc), Map.has_key?(b, key), do: {key, b[key]}
+
+    case Enum.find(values, fn {_, v} ->
+           not (is_nil(v) or text?(v) or (is_list(v) and Enum.all?(v, &text?/1)))
+         end) do
+      nil -> {:ok, Enum.flat_map(values, fn {_, v} -> addresses(v) end)}
+      {key, v} -> {:error, "a #{key} that is not text or a list of text: #{inspect(v)}"}
+    end
+  end
+
+  defp text?(v), do: is_binary(v)
 
   defp suppressions_in(%Request{method: "POST", url: url}, body) do
     case URI.parse(url).path do

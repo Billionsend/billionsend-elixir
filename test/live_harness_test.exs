@@ -125,4 +125,39 @@ defmodule BillionSend.LiveHarnessTest do
     assert Live.requests(agent) == 0
     assert Live.log(agent) == []
   end
+
+  test "a body that cannot be read, or a recipient that is not text, is refused rather than skipped" do
+    for to <- [
+          5,
+          %{"email" => "success@simulator.amazonses.com"},
+          [nil],
+          [["success@simulator.amazonses.com"]],
+          true
+        ] do
+      for field <- [:to, :cc, :bcc] do
+        assert {:error, reason} =
+                 guard(Map.put(%{to: "success@simulator.amazonses.com"}, field, to)),
+               "should refuse #{inspect(to)}"
+
+        assert reason =~ "not text"
+      end
+    end
+
+    assert {:error, reason} = guard([%{to: "success@simulator.amazonses.com"}, 7], "/emails/batch")
+    assert reason =~ "not an object"
+    assert {:error, _} = guard("a bare string")
+
+    broken = %{post("/emails", %{}) | body: ~s({"to": ["success@simulator.amazonses.com")}
+    assert {:error, reason} = Live.guard(MapSet.new(), broken)
+    assert reason =~ "not valid JSON"
+
+    for type <- ["text/plain", "application/octet-stream", "", "multipart/form-data; boundary=x"] do
+      odd = %{post("/emails", %{}) | headers: [{"content-type", type}], body: "to=ada@example.com"}
+      assert {:error, reason} = Live.guard(MapSet.new(), odd)
+      assert reason =~ "cannot be checked"
+    end
+
+    # null is no recipient.
+    assert {:ok, _} = guard(%{to: "success@simulator.amazonses.com", cc: nil})
+  end
 end
