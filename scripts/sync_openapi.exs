@@ -8,6 +8,7 @@
 #
 #   elixir scripts/sync_openapi.exs                  # fetch the published document
 #   elixir scripts/sync_openapi.exs --from path.json # copy a local document
+#   elixir scripts/sync_openapi.exs --check          # fail if the snapshot differs from the published document
 #
 # Free-text description / summary strings that name other products are dropped
 # from the snapshot (they carry no contract), so the repository only ever
@@ -20,17 +21,41 @@ defmodule SyncOpenAPI do
 
   # Names of other products that must not appear in this repository.
   defp foreign,
-    do: Regex.compile!("\\b(?:#{Enum.join(["Re" <> "send", "Sv" <> "ix"], "|")})\\b", "i")
+    do: Regex.compile!(Enum.join(["Re" <> "send", "Sv" <> "ix"], "|"), "i")
 
   def run(argv) do
     raw =
       case argv do
         ["--from", path] -> File.read!(path)
-        [] -> fetch()
+        argv when argv in [[], ["--check"]] -> fetch()
       end
 
     {spec, dropped} = sanitize(JSON.decode!(raw), 0)
-    File.write!(@snapshot, pretty(spec, 0) <> "\n")
+    text = pretty(spec, 0) <> "\n"
+
+    if argv == ["--check"] do
+      check(text)
+    else
+      write(spec, text, dropped)
+    end
+  end
+
+  defp check(text) do
+    if File.read!(@snapshot) == text do
+      IO.puts("openapi/api.openapi.json matches #{@url}")
+    else
+      IO.puts(
+        :stderr,
+        "openapi/api.openapi.json differs from #{@url}: run `elixir scripts/sync_openapi.exs`, " <>
+          "then `elixir scripts/generate.exs` and `mix test`"
+      )
+
+      System.halt(1)
+    end
+  end
+
+  defp write(spec, text, dropped) do
+    File.write!(@snapshot, text)
 
     count =
       for {_, item} <- spec["paths"],
@@ -43,6 +68,7 @@ defmodule SyncOpenAPI do
     IO.puts("wrote openapi/api.openapi.json: #{count} operations, #{dropped} descriptions dropped")
   end
 
+  # The document as published.
   defp fetch do
     {:ok, _} = Application.ensure_all_started([:inets, :ssl])
 

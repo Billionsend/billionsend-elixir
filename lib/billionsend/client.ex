@@ -93,18 +93,19 @@ defmodule BillionSend.Client do
   it; use it for anything they do not cover.
 
   Options: `:query` (a keyword list or map; lists are sent comma-separated),
-  `:headers`, `:body` (encoded as JSON), `:idempotency_key`,
-  `:auto_idempotency_key` (make one up when none is given), `:auth` (default
-  true), `:extra_headers`, `:timeout`.
+  `:headers`, `:body` (encoded as JSON), `:multipart` (a form, in place of
+  `:body`; see `BillionSend.Multipart`), `:idempotency_key`, `:auto_idempotency_key` (make one up when none is given),
+  `:auth` (default true), `:extra_headers`, `:timeout`.
   """
   @spec request(t(), String.t(), String.t(), keyword()) :: {:ok, term()} | {:error, Errors.t()}
   def request(%__MODULE__{} = client, method, path, opts \\ []) do
-    body = Keyword.get(opts, :body)
+    {body, content_type} = encode_body(opts)
 
     with {:ok, headers} <-
            headers(client,
              auth: Keyword.get(opts, :auth, true),
              body: body != nil,
+             content_type: content_type,
              idempotency_key: Keyword.get(opts, :idempotency_key),
              headers: Keyword.get(opts, :headers, []),
              extra_headers: Keyword.get(opts, :extra_headers, [])
@@ -122,11 +123,26 @@ defmodule BillionSend.Client do
         method: method,
         url: url(client, path, Keyword.get(opts, :query)),
         headers: headers,
-        body: if(body == nil, do: nil, else: JSON.encode!(body)),
+        body: body,
         timeout: Keyword.get(opts, :timeout) || client.timeout
       }
 
       attempt(client, req, keyed?, 0)
+    end
+  end
+
+  # `:body` is sent as JSON, `:multipart` as a multipart form (see `BillionSend.Multipart`).
+  defp encode_body(opts) do
+    case {Keyword.get(opts, :body), Keyword.get(opts, :multipart)} do
+      {nil, nil} ->
+        {nil, nil}
+
+      {body, nil} ->
+        {JSON.encode!(body), "application/json"}
+
+      {nil, fields} ->
+        {content_type, body} = BillionSend.Multipart.encode(fields)
+        {body, content_type}
     end
   end
 
@@ -370,7 +386,7 @@ defmodule BillionSend.Client do
 
         out =
           if Keyword.fetch!(opts, :body),
-            do: out ++ [{"Content-Type", "application/json"}],
+            do: out ++ [{"Content-Type", Keyword.get(opts, :content_type, "application/json")}],
             else: out
 
         out =
@@ -423,6 +439,7 @@ defmodule BillionSend.Client do
       query: Enum.map(query, fn {name, key} -> {name, Keyword.get(opts, key)} end),
       headers: Enum.map(header_params, fn {name, key} -> {name, Keyword.get(opts, key)} end),
       body: Keyword.get(spec, :body),
+      multipart: Keyword.get(spec, :multipart),
       idempotency_key: Keyword.get(opts, :idempotency_key),
       auto_idempotency_key: Keyword.has_key?(spec, :idempotent),
       auth: Keyword.get(spec, :auth, true),

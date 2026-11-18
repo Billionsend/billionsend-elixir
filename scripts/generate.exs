@@ -129,9 +129,20 @@ defmodule Generate do
 
       body = op["requestBody"]
 
+      # JSON, or a multipart form (a file upload); no operation takes both.
+      multipart = body != nil and Map.has_key?(body["content"], "multipart/form-data")
+
       body_schema =
         if body,
-          do: resolve(spec, get_in(body, ["content", "application/json", "schema"])),
+          do:
+            resolve(
+              spec,
+              get_in(body, [
+                "content",
+                if(multipart, do: "multipart/form-data", else: "application/json"),
+                "schema"
+              ])
+            ),
           else: %{}
 
       body_required =
@@ -174,6 +185,7 @@ defmodule Generate do
         query: query,
         headers: headers,
         body: body != nil,
+        multipart: multipart,
         body_required: body_required,
         body_omit_when_none: body != nil and body["required"] == false,
         idempotent: Enum.any?(by.("header"), &(String.downcase(&1["name"]) == "idempotency-key")),
@@ -317,7 +329,10 @@ defmodule Generate do
     arg_types =
       ["BillionSend.Client.t()"] ++
         Enum.map(op.path_params, fn _ -> "String.t()" end) ++
-        if(op.body, do: ["map() | list()#{if op.body, do: " | nil", else: ""}"], else: []) ++
+        if(op.body,
+          do: [if(op.multipart, do: "map() | keyword()", else: "map() | list() | nil")],
+          else: []
+        ) ++
         ["keyword()"]
 
     "@spec #{op.name}(#{Enum.join(arg_types, ", ")}) :: #{returns}"
@@ -331,6 +346,11 @@ defmodule Generate do
         if(op.idempotent,
           do:
             "Sent with an Idempotency-Key: `:idempotency_key` when given, else one made up for this call, so that its retries never send twice.",
+          else: nil
+        ),
+        if(op.multipart,
+          do:
+            "Sent as `multipart/form-data`: `params` holds the form's fields. A file is `{filename, content}` or `{filename, content, content_type}`; a map or list is sent as its JSON text; see `BillionSend.Multipart`.",
           else: nil
         ),
         "`#{op.method} #{op.path}`",
@@ -361,7 +381,7 @@ defmodule Generate do
         if(op.query != [], do: "query: [#{query}]"),
         if(op.headers != [], do: "headers: [#{headers}]"),
         if(required != [], do: "required: #{inspect(required)}"),
-        if(op.body, do: "body: params"),
+        if(op.body, do: if(op.multipart, do: "multipart: params", else: "body: params")),
         if(op.idempotent, do: "idempotent: true, extra: [:idempotency_key]"),
         if(not op.auth, do: "auth: false")
       ]

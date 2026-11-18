@@ -3,6 +3,9 @@ name: CI
 on:
   push:
   pull_request:
+  schedule:
+    # Daily: the published API may change without a push here.
+    - cron: "17 5 * * *"
 
 permissions:
   contents: read
@@ -35,6 +38,17 @@ jobs:
         run: mix compile --warnings-as-errors
       - name: Tests
         run: mix test --warnings-as-errors
+
+  snapshot:
+    name: Snapshot matches the published API
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18.4"
+          otp-version: "28"
+      - run: elixir scripts/sync_openapi.exs --check
 
   package:
     name: Package

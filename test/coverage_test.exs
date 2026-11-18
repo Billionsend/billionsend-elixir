@@ -40,7 +40,7 @@ defmodule BillionSend.CoverageTest do
     body =
       case op.spec["requestBody"] do
         nil -> []
-        b -> [Contract.example(get_in(b, ["content", "application/json", "schema"]), false)]
+        b -> [Contract.example(b["content"] |> Map.values() |> hd() |> Map.get("schema"), false)]
       end
 
     opts =
@@ -72,7 +72,7 @@ defmodule BillionSend.CoverageTest do
 
     keys = Enum.map(Contract.operations(), &Operation.key/1)
     assert MapSet.new(Enum.map(Mock.calls(mock), &Mock.Call.key/1)) == MapSet.new(keys)
-    assert length(Contract.operations()) == 139
+    assert length(Contract.operations()) == 180
   end
 
   test "every function of the resource modules is an operation, its ! twin or its _all stream" do
@@ -113,7 +113,7 @@ defmodule BillionSend.CoverageTest do
 
   test "sending operations always carry an idempotency key, a new one each call" do
     keyed = Enum.filter(Contract.operations(), &Operation.idempotency_key?/1)
-    assert length(keyed) == 8
+    assert length(keyed) == 9
     {client, mock} = client()
     Enum.each(keyed, &invoke(client, &1))
     keys = Enum.map(Mock.calls(mock), &Mock.Call.header(&1, "idempotency-key"))

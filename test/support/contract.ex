@@ -512,7 +512,7 @@ defmodule BillionSend.Test.Mock do
       |> URI.query_decoder()
       |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
 
-    body = if req.body, do: JSON.decode!(req.body)
+    body = if req.body, do: decode_body(req)
     call = %Call{operation: op, request: req, path_params: path_params, query: query, body: body}
     Agent.update(mock, fn s -> %{s | calls: [call | s.calls]} end)
     check(op, call)
@@ -522,6 +522,33 @@ defmodule BillionSend.Test.Mock do
         [answer | rest] -> {answer, put_in(s, [:queued, Operation.key(op)], rest)}
         [] -> {generated(op), s}
       end
+    end)
+  end
+
+  # A JSON body as is; a multipart form as a map of its fields (a file as its
+  # content), which is how the form's schema describes it.
+  defp decode_body(%Request{headers: headers, body: body}) do
+    type =
+      Enum.find_value(headers, "", fn {k, v} -> if String.downcase(k) == "content-type", do: v end)
+
+    case type do
+      "multipart/form-data; boundary=" <> boundary -> multipart_fields(body, boundary)
+      _ -> JSON.decode!(body)
+    end
+  end
+
+  defp multipart_fields(body, boundary) do
+    delimiter = "--" <> boundary
+
+    body
+    |> String.split(delimiter)
+    |> Enum.drop(1)
+    |> Enum.reject(&String.starts_with?(&1, "--"))
+    |> Map.new(fn part ->
+      part = part |> String.replace_prefix("\r\n", "") |> String.replace_suffix("\r\n", "")
+      [head, value] = String.split(part, "\r\n\r\n", parts: 2)
+      [_, name] = Regex.run(~r/name="([^"]+)"/, head)
+      {name, value}
     end)
   end
 
@@ -587,11 +614,8 @@ defmodule BillionSend.Test.Mock do
         :ok
 
       {body, value} ->
-        Contract.validate!(
-          value,
-          get_in(body, ["content", "application/json", "schema"]),
-          "#{where} body"
-        )
+        [{_, %{"schema" => schema}}] = Enum.to_list(body["content"])
+        Contract.validate!(value, schema, "#{where} body")
     end
   end
 

@@ -2,7 +2,7 @@
 
 The official Elixir client for the [BillionSend](https://billionsend.com) API: send and receive email, run inboxes for agents and people, manage domains, contacts, broadcasts, templates, webhooks and more.
 
-- Every operation of the API (139), named after the API's own `operationId`s.
+- Every operation of the API (180), named after the API's own `operationId`s.
 - No dependencies: OTP's `:httpc` and `:ssl`, and Elixir's built-in `JSON`.
 - Sends that never go out twice, retries, lazy paging streams, live event streams that resume where they stopped, and webhook signature verification.
 
@@ -12,7 +12,7 @@ Documentation: https://billionsend.com/docs.
 
 ```elixir
 def deps do
-  [{:billionsend, "~> 0.1"}]
+  [{:billionsend, "~> 0.2"}]
 end
 ```
 
@@ -133,24 +133,40 @@ end
 
 | Module | Covers |
 | --- | --- |
-| `BillionSend.Emails` | send, batch, list, get, update, cancel, delete, insights, metrics |
+| `BillionSend.Emails` (`.Attachments`) | send, batch, list, get, update, cancel, delete, share, unshare, insights, metrics; `Attachments.list`, `Attachments.get` |
 | `BillionSend.Emails.Metrics` | links, countries, clients |
 | `BillionSend.Emails.Receiving` (`.Attachments`) | received mail: list, get, delete, reply, forward; attachments and their extracted text |
-| `BillionSend.Domains` | create, list, get, update, delete, verify |
-| `BillionSend.ApiKeys` | create, list, delete |
-| `BillionSend.Contacts` (`.Topics`, `.Segments`, `.Batch`) | create, list, get, update, delete, preferences_link; `Batch.create`, `Batch.get`, `Batch.remove` |
+| `BillionSend.Domains` (`.Claims`) | create, list, get, update, delete, verify; `Claims.create`, `Claims.get`, `Claims.verify` |
+| `BillionSend.ApiKeys` | create, list, update, delete |
+| `BillionSend.Contacts` (`.Topics`, `.Segments`, `.Batch`, `.Imports`) | create, list, get, update, delete, preferences_link; `Segments.list`; `Batch.create`, `Batch.get`, `Batch.remove`; CSV uploads with `Imports.create`, `Imports.list`, `Imports.get` |
 | `BillionSend.Audiences.Contacts` | contacts addressed through an audience |
 | `BillionSend.ContactProperties`, `.Segments` (`.Contacts`), `.Topics` | contact data and grouping |
-| `BillionSend.Broadcasts` | create, list, get, update, delete, send, duplicate, cancel |
+| `BillionSend.Broadcasts` | create, list, get, update, delete, send, duplicate, cancel, recipients, clicked_links |
 | `BillionSend.Templates` | create, list, get, update, delete, publish, duplicate |
-| `BillionSend.Webhooks` | create, list, get, update, delete, rotate |
+| `BillionSend.Webhooks` (`.Events`) | create, list, get, update, delete, rotate_signing_secret; `Events.list`, `Events.get`, `Events.replay`, `Events.Attempts.list` |
+| `BillionSend.Automations` (`.Runs`) | create, list, get, update, remove, validate, duplicate, simulate, stop, metrics; `Runs.list`, `Runs.get`, `Runs.cancel` |
+| `BillionSend.Events` | custom events: create, list, get, update, remove, send |
+| `BillionSend.Logs`, `.OauthGrants` | request logs (list, get) and OAuth grants (list, revoke) |
 | `BillionSend.Suppressions` (`.Batch`), `.Unsubscribes` | suppression list (`Batch.add`, `Batch.remove`) and opt-outs |
 | `BillionSend.Verifications` | availability, estimate, create, list, get |
 | `BillionSend.Usage`, `.Deliverability` | account usage and sending health |
 | `BillionSend.Inboxes` (`.Events`) | create, list, get, update, delete, send; `Events.stream`, `Events.stream_inbox` |
-| `BillionSend.Inboxes.Agent`, `.Safety`, `.Labels`, `.Codes`, `.Quarantine`, `.Drafts` | inbox settings, labels, verification codes, held mail, drafts |
+| `BillionSend.Inboxes.Agent` (`get`, `update`), `.Safety`, `.Labels`, `.Codes`, `.Quarantine`, `.Drafts` | inbox settings, labels, verification codes, held mail, drafts |
 | `BillionSend.Inboxes.Threads` (`.Labels`, `.Emails`) | list, search, get, update, delete; thread labels; messages, reply and forward |
 | `BillionSend.Agent` | signup, status, claim_email |
+
+A CSV import is the one operation that takes a file: `BillionSend.Contacts.Imports.create/3` sends a `multipart/form-data` form, a file as `{filename, content}`, and a map or list field (`column_map`, `segments`, `topics`) as its JSON text. It queues the import; poll `Imports.get` for its `status` and `counts`:
+
+```elixir
+{:ok, upload} =
+  BillionSend.Contacts.Imports.create(client, %{
+    file: {"contacts.csv", File.read!("contacts.csv")},
+    column_map: %{email: "Email", first_name: "First Name"},
+    on_conflict: "skip"
+  })
+
+{:ok, upload} = BillionSend.Contacts.Imports.get(client, upload["id"])
+```
 
 Each function is named after its operation's `operationId` in the API document: the groups make the module, the last segment the function, camelCase written in snake_case. `emails.receiving.attachments.list` is `BillionSend.Emails.Receiving.Attachments.list/3` and `agent.claimEmail` is `BillionSend.Agent.claim_email/2`. An `operationId` that is also the group of others needs nothing special in Elixir, since a module and a function of the same name live side by side: `emails.metrics` is `BillionSend.Emails.metrics/2` and `emails.metrics.links` is `BillionSend.Emails.Metrics.links/2`.
 
@@ -229,14 +245,14 @@ elixir scripts/generate.exs
 mix test
 ```
 
-Whatever fails is what the SDK has to follow. CI runs `scripts/generate.exs --check` so the generated code never drifts from the snapshot.
+Whatever fails is what the SDK has to follow. CI runs `scripts/generate.exs --check` so the generated code never drifts from the snapshot, and `scripts/sync_openapi.exs --check` (on every push and pull request, and once a day) so the snapshot never drifts from the published API: it fails when `https://billionsend.com/docs/api.openapi.json` differs from `openapi/api.openapi.json`. The tests themselves never go online.
 
 ## Releasing
 
 Publishing is manual; nothing is published on push.
 
 1. On hex.pm, the owner of the `billionsend` package creates an API key with the `api:write` permission (Dashboard → Keys) and stores it in this repository as the `HEX_API_KEY` secret of the `hex` environment (Settings → Environments).
-2. Set `@version` in `mix.exs`, turn the changelog's `Unreleased` heading into that version, commit, then tag and push: `git tag v0.1.0 && git push origin main v0.1.0`.
+2. Set `@version` in `mix.exs`, turn the changelog's `Unreleased` heading into that version, commit, then tag and push: `git tag v0.2.0 && git push origin main v0.2.0`.
 3. Actions → `release` → Run workflow, on the version tag. The workflow refuses a branch or a tag that differs from the version in `mix.exs`, runs every check, and publishes the package with `mix hex.publish package`.
 
 The same release from a clean checkout of the tag is `HEX_API_KEY=… mix hex.publish package --yes`.

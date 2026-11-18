@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 (2026-11-19)
+
+The SDK follows the published API again: the OpenAPI snapshot it is built from had fallen behind, so `BillionSend.Usage.get/2` and other functions still described the old shapes.
+
+- Snapshot synced to `https://billionsend.com/docs/api.openapi.json`: 180 operations (was 139).
+- New functions: `BillionSend.Automations` (list, get, create, update, remove, validate, duplicate, simulate, stop, metrics) and `.Runs` (list, get, cancel); `BillionSend.Events` (list, get, create, update, remove, send); `BillionSend.Contacts.Imports` (list, get, create) and `Contacts.Segments.list`; `BillionSend.Domains.Claims` (create, get, verify); `Emails.share`, `Emails.unshare` and `BillionSend.Emails.Attachments` (list, get); `Broadcasts.recipients` and `Broadcasts.clicked_links`; `BillionSend.Logs` (list, get); `BillionSend.OauthGrants` (list, revoke); `BillionSend.Webhooks.Events` (list, get, replay) with `.Attempts.list`, and `Webhooks.rotate_signing_secret`; `ApiKeys.update`; `Inboxes.Agent.update`.
+- `Contacts.Imports.create/3` uploads a CSV as `multipart/form-data`: a file is `{filename, content}` (or `{filename, content, content_type}`), a map or list field is sent as its JSON text (`BillionSend.Multipart`, and `:multipart` in `BillionSend.Client.request/4`).
+- Removed: `Unsubscribes.delete` (the API no longer has it; an opt-out is the recipient's to undo) and `Webhooks.rotate`, replaced by `Webhooks.rotate_signing_secret`.
+- Answers and requests changed with the API's: `Usage.get` now answers `emails.daily` / `emails.monthly`, `contacts`, `domains` and the other limits in place of the old `limits` block, and the contact, domain, broadcast, webhook, template and inbox shapes follow the new schemas.
+- `scripts/sync_openapi.exs --check` fails when the snapshot differs from the published document; CI runs it on every push and pull request and once a day. The tests stay offline.
+
 ## 0.1.0 (2026-11-17)
 
 First release of the BillionSend Elixir SDK.
