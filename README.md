@@ -129,7 +129,7 @@ def create(conn, _params) do
 end
 ```
 
-`BillionSend.verify_webhook/4` checks the `webhook-id`, `webhook-timestamp` and `webhook-signature` headers (Standard Webhooks: HMAC-SHA256 over `id.timestamp.body`), accepts any of several signatures (both secrets sign during a rotation's overlap) and refuses a timestamp more than `tolerance:` seconds (default 300) from now, which bounds replays. Headers may be a map or a list of pairs (`conn.req_headers`), names in any case. It returns the parsed event (`"type"`, `"created_at"`, `"data"`). Parse the body only after verifying: re-serialised JSON does not verify. A secret that is not a `whsec_` secret raises `ArgumentError`. `verify_webhook!/4` returns the event or raises.
+`BillionSend.verify_webhook/4` checks the `webhook-id`, `webhook-timestamp` and `webhook-signature` headers (Standard Webhooks: HMAC-SHA256 over `id.timestamp.body`), accepts any of several signatures (both secrets sign during a rotation's overlap) and refuses a timestamp more than `tolerance:` seconds (default 300) from now, which bounds replays. Headers may be a map or a list of pairs (`conn.req_headers`), names in any case. It returns the parsed event (`"type"`, `"created_at"`, `"data"`). Parse the body only after verifying: re-serialised JSON does not verify. Deliveries come from `51.161.117.92` with the user agent `BillionSend-Webhooks/1.0 (+https://billionsend.com/docs/concepts/webhooks)`; if the receiving endpoint sits behind a WAF or Cloudflare, allow them as the [webhooks documentation](https://billionsend.com/docs/concepts/webhooks) describes. A secret that is not a `whsec_` secret raises `ArgumentError`. `verify_webhook!/4` returns the event or raises.
 
 ## Resources
 
@@ -149,7 +149,7 @@ end
 | `BillionSend.Automations` (`.Runs`) | create, list, get, update, remove, validate, duplicate, simulate, stop, metrics; `Runs.list`, `Runs.get`, `Runs.cancel` |
 | `BillionSend.Events` | custom events: create, list, get, update, remove, send |
 | `BillionSend.Logs`, `.OauthGrants` | request logs (list, get) and OAuth grants (list, revoke) |
-| `BillionSend.Suppressions` (`.Batch`), `.Unsubscribes` | suppression list (`Batch.add`, `Batch.remove`) and opt-outs |
+| `BillionSend.Suppressions` (`.Batch`), `.Unsubscribes` | suppression list (`Batch.add`, `Batch.remove`) and opt-outs; an entry is for one address or, with `domain:` / `domains:`, for a whole domain: its `"email"` is `nil` then (`"kind"` says which, `"removable"` is `false` for a bounce or a complaint), and `list(client, kind: "all")` lists both |
 | `BillionSend.Verifications` | availability, estimate, create, list, get |
 | `BillionSend.Usage`, `.Deliverability` | account usage and sending health |
 | `BillionSend.Inboxes` (`.Events`) | create, list, get, update, delete, send; `Events.stream`, `Events.stream_inbox` |

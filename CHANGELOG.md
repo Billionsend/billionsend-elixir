@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.2 (2026-11-19)
+
+Snapshot synced to the published API (`https://billionsend.com/docs/api.openapi.json`, still 180 operations).
+
+- Suppressions can block a whole domain. An entry has `kind` (`email` or `domain`), `domain` and `removable` (`false` for a permanent bounce or complaint entry), and its `email` is `nil` on a domain entry, so code that reads `entry["email"]` of a listed entry must allow `nil` (`list_all` included). `Suppressions.create/3` takes `domain:` in place of `email:`, `Suppressions.Batch.add/3` takes `domains:` (with or without `emails:`), and `Suppressions.list/2` takes `kind:` (`email`, the default, `domain` or `all`). A consumer mailbox provider such as gmail.com is refused as a domain.
+- `Deliverability.get/2` answers `domains`: each sending domain's own standing (`domain_id`, `domain`, `status`, `tier`, `paused_by`, the counts and rates, `pause_margin`, `window_days`); a shared-domain row has no `domain_id` or `domain`.
+- A paused sending domain refuses its sends with `403` `domain_sending_paused` (a `BillionSend.PermissionDeniedError`, like `sending_paused`, which is still the team's pause).
+- The `deliverability.warning` and `deliverability.paused` webhook payloads carry `scope` (`team` or `domain`) and `domain` (`{id, name}`, `null` for the team).
+- `custom_return_path` now defaults to `bounce` (it was `send`), is fixed when the domain is added, and `Domains.update/4` with it answers `422`.
+- README: webhooks are delivered from `51.161.117.92` with a fixed user agent; allow them if the endpoint is behind a WAF.
+- The live-test harness refuses a recipient at a domain the run suppressed.
+
 ## 0.2.1 (2026-11-19)
 
 Snapshot synced to the published API (`https://billionsend.com/docs/api.openapi.json`, still 180 operations).

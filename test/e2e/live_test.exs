@@ -459,8 +459,22 @@ defmodule BillionSend.LiveTest do
 
     track(agent, {:suppression, second}, fn -> BillionSend.Suppressions.delete(c, second) end)
 
+    # A domain entry has no address; it is listed with `kind`, and the harness refuses
+    # any recipient at it from now on.
+    blocked = "sdk-e2e-elixir-#{tag}.example"
+
+    %{"id" => by_domain, "kind" => "domain", "email" => nil, "domain" => ^blocked} =
+      ok!(BillionSend.Suppressions.create(c, %{domain: blocked}))
+
+    track(agent, {:suppression, by_domain}, fn -> BillionSend.Suppressions.delete(c, by_domain) end)
+
+    assert %{"data" => listed} = ok!(BillionSend.Suppressions.list(c, kind: "domain", limit: 100))
+    assert Enum.any?(listed, &(&1["id"] == by_domain and &1["removable"] == true))
+
+    assert {:ok, %{"deleted" => true}} = BillionSend.Suppressions.delete(c, by_domain)
     assert {:ok, %{"deleted" => true}} = BillionSend.Suppressions.delete(c, second)
     assert {:ok, %{"deleted" => true}} = BillionSend.Suppressions.delete(c, id)
+    Live.forget(agent, {:suppression, by_domain})
     Live.forget(agent, {:suppression, second})
     Live.forget(agent, {:suppression, id})
     contract!(agent)
@@ -832,8 +846,9 @@ defmodule BillionSend.LiveTest do
        "sdk-e2e-elixir-", &BillionSend.Automations.remove(c, &1["id"])},
       {"events", fn -> BillionSend.Events.list(c, limit: 100) end, & &1["name"], "sdk-e2e-elixir-",
        &BillionSend.Events.remove(c, &1["id"])},
-      {"suppressions", fn -> BillionSend.Suppressions.list(c, limit: 100) end, & &1["email"],
-       "sdk-e2e-elixir-", &BillionSend.Suppressions.delete(c, &1["id"])},
+      {"suppressions", fn -> BillionSend.Suppressions.list(c, limit: 100, kind: "all") end,
+       &(&1["email"] || &1["domain"]), "sdk-e2e-elixir-",
+       &BillionSend.Suppressions.delete(c, &1["id"])},
       {"contacts", fn -> BillionSend.Contacts.list(c, limit: 100) end, & &1["email"],
        "sdk-e2e-elixir-", &BillionSend.Contacts.delete(c, &1["id"])}
     ]

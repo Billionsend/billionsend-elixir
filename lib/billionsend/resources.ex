@@ -4895,12 +4895,19 @@ defmodule BillionSend.Suppressions do
     * `:after` - query `after`
     * `:before` - query `before`
     * `:origin` - query `origin`
+    * `:kind` - query `kind`
     * `:extra_headers`, `:timeout`
   """
   @spec list(BillionSend.Client.t(), keyword()) :: {:ok, term()} | {:error, BillionSend.Errors.t()}
   def list(client, opts \\ []) do
     BillionSend.Client.call(client, "GET", "/suppressions", opts,
-      query: [{"limit", :limit}, {"after", :after}, {"before", :before}, {"origin", :origin}]
+      query: [
+        {"limit", :limit},
+        {"after", :after},
+        {"before", :before},
+        {"origin", :origin},
+        {"kind", :kind}
+      ]
     )
   end
 

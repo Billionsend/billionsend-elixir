@@ -91,6 +91,23 @@ defmodule BillionSend.LiveHarnessTest do
              guard(%{to: ["success+another@simulator.amazonses.com"]}, "/emails", suppressed)
   end
 
+  test "a domain put on the suppression list blocks every recipient at it, however it was put there" do
+    {:ok, suppressed} =
+      guard(%{domain: "Simulator.Amazonses.com"}, "/suppressions")
+
+    {:ok, suppressed} =
+      guard(%{domains: ["other.example"]}, "/suppressions/batch/add", suppressed)
+
+    assert {:error, reason} =
+             guard(%{to: ["success+any@simulator.amazonses.com"]}, "/emails", suppressed)
+
+    assert reason =~ "suppression list"
+
+    # A request that only names a domain is not a send, and does not suppress an address.
+    assert {:ok, only_domains} = guard(%{domain: "other.example"}, "/suppressions")
+    assert {:ok, _} = guard(%{to: ["success@simulator.amazonses.com"]}, "/emails", only_domains)
+  end
+
   test "the request that suppresses an address is not itself a send, and bodies without recipients pass" do
     assert {:ok, _} = guard(%{email: "ada@example.com"}, "/contacts")
     assert {:ok, _} = guard(%{name: "x"}, "/segments")

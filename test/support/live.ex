@@ -129,8 +129,8 @@ defmodule BillionSend.Test.Live do
 
     1. a recipient (`to`, `cc`, `bcc`, in a body or in each body of a batch) is
        `success@simulator.amazonses.com` or a plus-alias of it, nothing else;
-    2. an address the run has put on the suppression list (a suppression created
-       or added in a batch) is never a recipient: mail to it would make the
+    2. an address, or an address at a domain, the run has put on the suppression
+       list (a suppression created or added in a batch) is never a recipient: mail to it would make the
        platform announce `email.suppressed` to the account's real webhook.
 
   Returns `{:ok, suppressed}` with the addresses suppressed so far (this request's
@@ -150,7 +150,7 @@ defmodule BillionSend.Test.Live do
             {:error,
              "a recipient that is not success@simulator.amazonses.com or a plus-alias of it: #{bad}"}
 
-          bad = Enum.find(recipients, &MapSet.member?(suppressed, &1)) ->
+          bad = Enum.find(recipients, &suppressed?(suppressed, &1)) ->
             {:error, "a recipient that is on the suppression list the run made: #{bad}"}
 
           true ->
@@ -158,6 +158,11 @@ defmodule BillionSend.Test.Live do
         end
       end
     end
+  end
+
+  defp suppressed?(suppressed, address) do
+    domain = address |> String.split("@") |> List.last()
+    MapSet.member?(suppressed, address) or MapSet.member?(suppressed, "@" <> domain)
   end
 
   # A body that cannot be read cannot be checked, so it is not sent (a file upload is the
@@ -209,13 +214,19 @@ defmodule BillionSend.Test.Live do
 
   defp suppressions_in(%Request{method: "POST", url: url}, body) do
     case URI.parse(url).path do
-      "/suppressions" -> MapSet.new(addresses(body["email"]))
-      "/suppressions/batch/add" -> MapSet.new(addresses(body["emails"]))
+      "/suppressions" -> MapSet.new(addresses(body["email"]) ++ domains(body["domain"]))
+      "/suppressions/batch/add" -> MapSet.new(addresses(body["emails"]) ++ domains(body["domains"]))
       _ -> MapSet.new()
     end
   end
 
   defp suppressions_in(_, _), do: MapSet.new()
+
+  # A suppressed domain is kept as "@domain": every recipient at it is then refused.
+  defp domains(nil), do: []
+  defp domains(list) when is_list(list), do: Enum.flat_map(list, &domains/1)
+  defp domains(text) when is_binary(text), do: ["@" <> (text |> String.trim() |> String.downcase())]
+  defp domains(_), do: []
 
   # "Name <a@b>", "a@b" or a list of them, as lower-case bare addresses.
   defp addresses(nil), do: []

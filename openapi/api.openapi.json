@@ -471,6 +471,17 @@
       },
       "BatchAddSuppressionsRequest": {
         "properties": {
+          "domains": {
+            "description": "BillionSend extension: domains to block entirely (every address at that exact domain, subdomains not covered), up to 1000; recorded as manual entries, consumer mailbox providers such as gmail.com are refused. Their entries follow the emails' in the response",
+            "items": {
+              "maxLength": 253,
+              "minLength": 3,
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
+          },
           "emails": {
             "description": "Addresses to block, up to 1000; duplicates collapse",
             "items": {
@@ -491,9 +502,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "emails"
-        ],
         "type": "object"
       },
       "BatchAddSuppressionsResponse": {
@@ -1161,7 +1169,8 @@
             "type": "boolean"
           },
           "custom_return_path": {
-            "default": "send",
+            "default": "bounce",
+            "description": "The MAIL FROM (return-path) subdomain, fixed when the domain is added: it cannot be changed later (delete and re-add the domain). Defaults to `bounce`, not `send`, so a domain that still sends through another provider whose return path is `send` keeps its bounces working while both send.",
             "type": "string"
           },
           "name": {
@@ -1837,7 +1846,8 @@
             "type": "boolean"
           },
           "custom_return_path": {
-            "default": "send",
+            "default": "bounce",
+            "description": "The MAIL FROM (return-path) subdomain, fixed when the domain is added: it cannot be changed later (delete and re-add the domain). Defaults to `bounce`, not `send`, so a domain that still sends through another provider whose return path is `send` keeps its bounces working while both send.",
             "type": "string"
           },
           "name": {
@@ -2443,6 +2453,12 @@
       },
       "CreateSuppressionRequest": {
         "properties": {
+          "domain": {
+            "description": "BillionSend extension: block every address at this exact domain (subdomains are not covered), instead of one email. Recorded as a manual entry; consumer mailbox providers such as gmail.com are refused",
+            "maxLength": 253,
+            "minLength": 3,
+            "type": "string"
+          },
           "email": {
             "description": "Bare email address to block; stored normalized (lowercase)",
             "format": "email",
@@ -2458,9 +2474,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "email"
-        ],
         "type": "object"
       },
       "CreateTemplateRequest": {
@@ -2788,6 +2801,13 @@
               "null"
             ]
           },
+          "domains": {
+            "description": "Each sending domain's own standing over the trailing 7 days (BillionSend extension). guardrail_status is the team as a whole",
+            "items": {
+              "$ref": "#/components/schemas/DomainDeliverability"
+            },
+            "type": "array"
+          },
           "emails_sent": {
             "type": "integer"
           },
@@ -2846,7 +2866,8 @@
           "window_days",
           "insufficient_outcome_data",
           "guardrail_status",
-          "score_version"
+          "score_version",
+          "domains"
         ],
         "type": "object"
       },
@@ -2964,6 +2985,109 @@
           "failure_reason",
           "created_at",
           "expires_at"
+        ],
+        "type": "object"
+      },
+      "DomainDeliverability": {
+        "properties": {
+          "complaint_rate": {
+            "type": "number"
+          },
+          "complaints": {
+            "type": "integer"
+          },
+          "delivered": {
+            "type": "integer"
+          },
+          "domain": {
+            "description": "The sending domain's name; null for the shared-domain addresses",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "domain_id": {
+            "description": "The sending domain's id; null for the team's shared-domain addresses",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "emails_sent": {
+            "description": "Emails sent from the domain in the window",
+            "type": "integer"
+          },
+          "hard_bounce_rate": {
+            "type": "number"
+          },
+          "hard_bounces": {
+            "type": "integer"
+          },
+          "pause_margin": {
+            "description": "1 minus the rate over its pause line, on the metric nearer to its line (recent rates): 1 with no events, 0 at the line, negative past it",
+            "type": "number"
+          },
+          "paused_by": {
+            "description": "Whether the domain's mail is paused by its own rates, by the team's as a whole, or both; null when not paused",
+            "enum": [
+              "domain",
+              "team",
+              "both",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "recent_complaint_rate": {
+            "description": "Complaint rate over today and yesterday (UTC)",
+            "type": "number"
+          },
+          "recent_hard_bounce_rate": {
+            "description": "Hard-bounce rate over today and yesterday (UTC), the window the pause line judges",
+            "type": "number"
+          },
+          "status": {
+            "description": "The domain's own standing, judged on its own mail with the team's windows and lines. paused refuses new sends from this domain (403 domain_sending_paused) while the team's other domains keep sending",
+            "enum": [
+              "ok",
+              "warning",
+              "paused"
+            ],
+            "type": "string"
+          },
+          "tier": {
+            "description": "status, or insufficient while the window holds fewer than 100 sends and no line has fired",
+            "enum": [
+              "ok",
+              "warning",
+              "paused",
+              "insufficient"
+            ],
+            "type": "string"
+          },
+          "window_days": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "domain_id",
+          "domain",
+          "status",
+          "emails_sent",
+          "hard_bounce_rate",
+          "complaint_rate",
+          "hard_bounces",
+          "complaints",
+          "delivered",
+          "window_days",
+          "tier",
+          "paused_by",
+          "recent_hard_bounce_rate",
+          "recent_complaint_rate",
+          "pause_margin"
         ],
         "type": "object"
       },
@@ -4908,11 +5032,30 @@
           "created_at": {
             "type": "string"
           },
+          "domain": {
+            "description": "The blocked domain; null on an email entry",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "email": {
-            "type": "string"
+            "description": "The blocked address; null on a domain entry",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "id": {
             "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "description": "BillionSend extension: an entry for one address, or for every address at one domain",
+            "enum": [
+              "email",
+              "domain"
+            ],
             "type": "string"
           },
           "object": {
@@ -4929,6 +5072,10 @@
             ],
             "type": "string"
           },
+          "removable": {
+            "description": "BillionSend extension: false for a permanent entry (a bounce or a complaint)",
+            "type": "boolean"
+          },
           "source_id": {
             "description": "Email id whose bounce/complaint created the entry",
             "format": "uuid",
@@ -4941,6 +5088,9 @@
         "required": [
           "id",
           "email",
+          "kind",
+          "domain",
+          "removable",
           "origin",
           "source_id",
           "created_at",
@@ -8975,11 +9125,30 @@
                 "created_at": {
                   "type": "string"
                 },
+                "domain": {
+                  "description": "The blocked domain; null on an email entry",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "email": {
-                  "type": "string"
+                  "description": "The blocked address; null on a domain entry",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "id": {
                   "format": "uuid",
+                  "type": "string"
+                },
+                "kind": {
+                  "description": "BillionSend extension: an entry for one address, or for every address at one domain",
+                  "enum": [
+                    "email",
+                    "domain"
+                  ],
                   "type": "string"
                 },
                 "origin": {
@@ -8989,6 +9158,10 @@
                     "manual"
                   ],
                   "type": "string"
+                },
+                "removable": {
+                  "description": "BillionSend extension: false for a permanent entry (a bounce or a complaint)",
+                  "type": "boolean"
                 },
                 "source_id": {
                   "description": "Email id whose bounce/complaint created the entry",
@@ -9002,6 +9175,9 @@
               "required": [
                 "id",
                 "email",
+                "kind",
+                "domain",
+                "removable",
                 "origin",
                 "source_id",
                 "created_at"
@@ -11974,6 +12150,9 @@
           "click_tracking": {
             "description": "Rewrite links to redirect through the tracking host and record email.clicked events. Off by default.",
             "type": "boolean"
+          },
+          "custom_return_path": {
+            "description": "Not changeable: the return-path subdomain is fixed when the domain is added. Sending it answers 422; delete and re-add the domain to use another."
           },
           "open_tracking": {
             "description": "Inject a tracking pixel served from the tracking host and record email.opened events. Off by default.",
@@ -32418,6 +32597,21 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "description": "BillionSend extension. email (default): entries for single addresses; domain: entries for a whole domain; all: both",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "description": "BillionSend extension. email (default): entries for single addresses; domain: entries for a whole domain; all: both",
+              "enum": [
+                "email",
+                "domain",
+                "all"
+              ],
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -32429,7 +32623,7 @@
                 }
               }
             },
-            "description": "Suppressions, optionally filtered by origin (bounce, complaint or manual). Rows whose address was erased (GDPR/LGPD) keep blocking sends but are hidden from the list and from lookups by email; they are reachable by id only.",
+            "description": "Suppressions, optionally filtered by origin (bounce, complaint or manual). Entries for single addresses by default; `kind=domain` lists the domain entries, `kind=all` both. Rows whose address was erased (GDPR/LGPD) keep blocking sends but are hidden from the list and from lookups by email; they are reachable by id only.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -32529,7 +32723,7 @@
                 }
               }
             },
-            "description": "Address blocked with the given origin (bounce, complaint or manual; default manual). Idempotent: an address already suppressed keeps its entry and origin and its existing id is returned.",
+            "description": "Address blocked with the given origin (bounce, complaint or manual; default manual), or, with `domain`, every address at that exact domain (a manual entry). Idempotent: an address or domain already suppressed keeps its entry and origin and its existing id is returned.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/RequestId"
