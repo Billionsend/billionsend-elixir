@@ -140,6 +140,38 @@ defmodule BillionSend.ConnectionTest do
     assert ms < 300, "the next request waited #{ms} ms behind the one that timed out"
   end
 
+  test "a request whose connection's process dies without answering fails at once, not at the timeout" do
+    url = serve(fn socket, _n -> read_request(socket) && Process.sleep(:infinity) end)
+    c = client(url, timeout: 5_000)
+
+    task =
+      Task.async(fn ->
+        elapsed(fn -> BillionSend.Client.request(c, "POST", "/x", body: %{a: 1}) end)
+      end)
+
+    assert_receive {:accepted, 0}
+
+    # The request is on the wire and unanswered: kill the process :httpc handles it in.
+    [{handler, _, _} | _] = await_handlers()
+    Process.exit(handler, :kill)
+
+    {result, ms} = Task.await(task, 8_000)
+    assert {:error, %BillionSend.APIConnectionError{message: message}} = result
+    assert message =~ "connection_handler_exited"
+    assert ms < 2_000, "waited #{ms} ms for an answer from a process that was gone"
+  end
+
+  defp await_handlers(left \\ 50) do
+    case :httpc.info(:billionsend)[:handlers] do
+      [_ | _] = handlers ->
+        handlers
+
+      _ when left > 0 ->
+        Process.sleep(20)
+        await_handlers(left - 1)
+    end
+  end
+
   test "requests in flight together are each answered without waiting for the others" do
     url =
       serve(fn socket, _n ->

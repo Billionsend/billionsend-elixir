@@ -81,21 +81,95 @@ defmodule BillionSend.Transport.Httpc do
     ensure_started()
 
     with {:ok, http_options} <- http_options(state, req) do
+      # Asynchronous, so that the wait can notice the connection's handler process
+      # dying: a synchronous :httpc call never hears of that and waits out the
+      # whole timeout for an answer that will not come.
       case :httpc.request(
              method(req),
              request_tuple(req),
              http_options,
-             [body_format: :binary],
+             [body_format: :binary, sync: false],
              @profile
            ) do
-        {:ok, {{_, status, _}, headers, body}} ->
-          {:ok, %Response{status: status, headers: headers_map(headers), body: body}}
+        {:ok, id} when is_reference(id) ->
+          case await(id, req.timeout) do
+            {:ok, {{_, status, _}, headers, body}} ->
+              {:ok, %Response{status: status, headers: headers_map(headers), body: body}}
+
+            {:error, reason} ->
+              {:error, failure(reason)}
+          end
 
         {:error, reason} ->
           {:error, failure(reason)}
       end
     end
   end
+
+  # How long past its own timeout a request is waited for: :httpc's handler answers
+  # `:timeout` itself at `timeout`, so this only ends a wait that nothing can answer.
+  @answer_grace 5_000
+  @lookup_every 25
+
+  # The answer of request `id`: what :httpc sends, or an error the moment the process
+  # handling the request is gone without having answered.
+  defp await(id, timeout) do
+    deadline = System.monotonic_time(:millisecond) + timeout + @answer_grace
+    await(id, nil, deadline)
+  end
+
+  defp await(id, monitor, deadline) do
+    monitor = monitor || watch(id)
+    left = max(deadline - System.monotonic_time(:millisecond), 0)
+    # Until the handler is known, look for it again every few milliseconds.
+    wait = if monitor == nil, do: min(@lookup_every, left), else: left
+
+    receive do
+      {:http, {^id, answer}} ->
+        monitor && Process.demonitor(monitor, [:flush])
+        answered(answer)
+
+      {:DOWN, ^monitor, :process, _pid, reason} ->
+        # An answer is sent before the handler exits, so it is already here if there is one.
+        receive do
+          {:http, {^id, answer}} -> answered(answer)
+        after
+          0 -> {:error, {:connection_handler_exited, reason}}
+        end
+    after
+      wait ->
+        if left == 0 do
+          :httpc.cancel_request(id, @profile)
+          flush(id)
+        else
+          await(id, monitor, deadline)
+        end
+    end
+  end
+
+  defp flush(id) do
+    receive do
+      {:http, {^id, answer}} -> answered(answer)
+    after
+      0 -> {:error, :timeout}
+    end
+  end
+
+  # :httpc keeps the handler of each request in a table named after the profile.
+  # Where it cannot be read there is nothing to watch, and the wait ends with the
+  # request's own timeout, as it did.
+  defp watch(id) do
+    case :ets.lookup(:"httpc_#{@profile}__handler_db", id) do
+      [{^id, pid, _from}] when is_pid(pid) -> Process.monitor(pid)
+      _ -> nil
+    end
+  rescue
+    ArgumentError -> nil
+  end
+
+  defp answered({:ok, {_, _, _} = answer}), do: {:ok, answer}
+  defp answered({_, _, _} = answer), do: {:ok, answer}
+  defp answered({:error, _} = error), do: error
 
   @impl true
   def open_stream(state, %Request{} = req) do
