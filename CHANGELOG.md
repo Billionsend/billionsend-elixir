@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 (2026-11-19)
+
+Snapshot synced to the published API (`https://billionsend.com/docs/api.openapi.json`, still 180 operations).
+
+- Every operation a restricted key can be refused on now declares a `403` response (`restricted_api_key`, an `ErrorResponse`): 103 operations gained it and 74 existing ones name what a restricted key is refused. Only the public `POST /agent/signup` has none. The tests that check every declared error status cover them.
+- `Emails.Receiving.list/2`: the `:inbox_id` option takes an inbox ID or the inbox's email address, as the `/inboxes/{inbox_id}` paths do (it was typed as a UUID only). An inbox that does not exist or belongs to another team answers 404; a malformed value answers 422.
+- A path that ends with `/` now answers 404 `not_found` instead of 401 `missing_api_key`. The check that refuses an empty path parameter before sending is unchanged.
+
 ## 0.2.0 (2026-11-19)
 
 The SDK follows the published API again: the OpenAPI snapshot it is built from had fallen behind, so `BillionSend.Usage.get/2` and other functions still described the old shapes.

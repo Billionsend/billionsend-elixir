@@ -97,6 +97,19 @@ defmodule BillionSend.ClientTest do
     assert List.last(Mock.calls(mock)).query == %{"unread" => ["true"], "limit" => ["5"]}
   end
 
+  test "the inbox filter of the received-mail list takes an inbox address as well as an id" do
+    {client, mock} = client()
+    {:ok, _} = BillionSend.Emails.Receiving.list(client, inbox_id: "agent@acme.billionsend.app")
+    assert List.last(Mock.calls(mock)).query == %{"inbox_id" => ["agent@acme.billionsend.app"]}
+
+    {:ok, _} =
+      BillionSend.Emails.Receiving.list(client, inbox_id: "9b2f6a52-7a6e-4a53-9a4a-6f1d2d1f4f10")
+
+    assert List.last(Mock.calls(mock)).query == %{
+             "inbox_id" => ["9b2f6a52-7a6e-4a53-9a4a-6f1d2d1f4f10"]
+           }
+  end
+
   test "unknown and missing options are refused before sending" do
     {client, mock} = client()
 
