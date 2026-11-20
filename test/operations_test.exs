@@ -214,7 +214,10 @@ defmodule BillionSend.OperationsTest do
       describe "#{id} retries" do
         test "a 503 and a lost connection are retried exactly when repeating is safe" do
           op = op({unquote(method), unquote(path)})
-          safe? = op.method in ~w(GET PUT DELETE) or Operation.idempotency_key?(op)
+
+          safe? =
+            (op.method in ~w(GET PUT DELETE) and not Operation.upload?(op)) or
+              Operation.idempotency_key?(op)
 
           for failure <- [:status, :connection] do
             {client, mock} = client()

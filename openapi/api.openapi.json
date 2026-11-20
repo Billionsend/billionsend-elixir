@@ -1081,6 +1081,79 @@
         ],
         "type": "object"
       },
+      "Brand": {
+        "properties": {
+          "accent_color": {
+            "description": "Button and link color, #rrggbb; null is the built-in color",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "branding_locked": {
+            "description": "Read-only: the plan has no branding (Free): recipients see the built-in look and logo; what is saved here applies again on a paid plan",
+            "type": "boolean"
+          },
+          "company_address": {
+            "description": "Postal address shown in the page's footer; null shows none",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "font": {
+            "description": "Page font; null is the built-in font",
+            "enum": [
+              "geist",
+              "system",
+              "serif",
+              "mono",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "logo_url": {
+            "description": "Read-only: the team's logo, shown on every domain's page that has no logo of its own; null when none is uploaded or this deployment has no logo storage. Set with PUT /brand/logo, removed with DELETE /brand/logo",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "object": {
+            "enum": [
+              "brand"
+            ],
+            "type": "string"
+          },
+          "powered_by": {
+            "description": "Whether \"Powered by BillionSend\" shows under the page of every domain that does not set its own powered_by. Always true on a plan that cannot hide it",
+            "type": "boolean"
+          },
+          "powered_by_locked": {
+            "description": "Read-only: the plan cannot hide the line (Free), so it shows on every domain whatever is saved",
+            "type": "boolean"
+          },
+          "show_topics": {
+            "description": "Whether the page lists the topics a recipient can switch",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "object",
+          "logo_url",
+          "accent_color",
+          "font",
+          "company_address",
+          "powered_by",
+          "powered_by_locked",
+          "show_topics",
+          "branding_locked"
+        ],
+        "type": "object"
+      },
       "BroadcastIdResponse": {
         "properties": {
           "id": {
@@ -1593,12 +1666,20 @@
       },
       "CreateBroadcastRequest": {
         "properties": {
+          "dormant_check": {
+            "description": "BillionSend extension: when true (the default), a contact who got 8 or more of your broadcasts and automation emails with no tracked open or click for 120 days (or ever) gets a short \"still want these?\" email with a confirm link instead of this broadcast, and is left out of later broadcasts if it does not confirm or engage within 14 days. Applies only when the sending domain has open or click tracking on. false sends the content to everyone",
+            "type": "boolean"
+          },
           "from": {
             "description": "Sender, \"Name <user@domain>\"; the domain must be one of the team's own verified domains when the broadcast is sent: sending from an address on the shared inbox domain answers 403. Required unless `template` supplies a default sender",
             "type": "string"
           },
           "html": {
             "type": "string"
+          },
+          "include_dormant": {
+            "description": "BillionSend extension: true also sends to contacts marked dormant (they did not answer a \"still want these?\" email). Default false",
+            "type": "boolean"
           },
           "name": {
             "description": "Internal name shown in the dashboard",
@@ -2055,7 +2136,7 @@
             ]
           },
           "unsubscribe_page": {
-            "description": "BillionSend extension: this domain's own look for its unsubscribe pages. A null field falls back to the team's default page, then to the built-in default.",
+            "description": "BillionSend extension: this domain's own look for its unsubscribe pages. A null field falls back to the team's default page, then to the built-in default. On a plan without branding (Free) recipients see the built-in look and logo whatever is saved; the saved look applies again on a paid plan.",
             "properties": {
               "accent_color": {
                 "type": [
@@ -2089,7 +2170,7 @@
                 ]
               },
               "logo_url": {
-                "description": "Read-only; uploaded in the dashboard",
+                "description": "Read-only: this domain's own logo, null when none is uploaded (the page then shows the team's logo) or when this deployment has no logo storage. Set with PUT /domains/{id}/unsubscribe-page/logo, removed with DELETE",
                 "type": [
                   "string",
                   "null"
@@ -2101,6 +2182,17 @@
                   "null"
                 ]
               },
+              "powered_by": {
+                "description": "This domain's own choice for the \"Powered by BillionSend\" line; null follows the team's brand default",
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "powered_by_effective": {
+                "description": "Read-only: whether recipients see the line now. This domain's choice, else the team's, and always true on a plan that cannot hide it",
+                "type": "boolean"
+              },
               "redirect_url": {
                 "type": [
                   "string",
@@ -2108,6 +2200,13 @@
                 ]
               },
               "success_message": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "support_url": {
+                "description": "Support link under the page; null shows none",
                 "type": [
                   "string",
                   "null"
@@ -2125,6 +2224,9 @@
               "message",
               "success_message",
               "redirect_url",
+              "support_url",
+              "powered_by",
+              "powered_by_effective",
               "background_color",
               "text_color",
               "accent_color",
@@ -3602,6 +3704,10 @@
               "null"
             ]
           },
+          "dormant_check": {
+            "description": "BillionSend extension: whether long-unengaged contacts get the \"still want these?\" email instead",
+            "type": "boolean"
+          },
           "failed_at": {
             "description": "BillionSend extension: when the broadcast failed; null unless status is failed",
             "type": [
@@ -3644,6 +3750,10 @@
           "id": {
             "format": "uuid",
             "type": "string"
+          },
+          "include_dormant": {
+            "description": "BillionSend extension: whether contacts marked dormant are included",
+            "type": "boolean"
           },
           "name": {
             "type": [
@@ -3739,7 +3849,9 @@
           "topic_id",
           "domain_id",
           "html",
-          "text"
+          "text",
+          "dormant_check",
+          "include_dormant"
         ],
         "type": "object"
       },
@@ -4117,7 +4229,7 @@
             ]
           },
           "unsubscribe_page": {
-            "description": "BillionSend extension: this domain's own look for its unsubscribe pages. A null field falls back to the team's default page, then to the built-in default.",
+            "description": "BillionSend extension: this domain's own look for its unsubscribe pages. A null field falls back to the team's default page, then to the built-in default. On a plan without branding (Free) recipients see the built-in look and logo whatever is saved; the saved look applies again on a paid plan.",
             "properties": {
               "accent_color": {
                 "type": [
@@ -4151,7 +4263,7 @@
                 ]
               },
               "logo_url": {
-                "description": "Read-only; uploaded in the dashboard",
+                "description": "Read-only: this domain's own logo, null when none is uploaded (the page then shows the team's logo) or when this deployment has no logo storage. Set with PUT /domains/{id}/unsubscribe-page/logo, removed with DELETE",
                 "type": [
                   "string",
                   "null"
@@ -4163,6 +4275,17 @@
                   "null"
                 ]
               },
+              "powered_by": {
+                "description": "This domain's own choice for the \"Powered by BillionSend\" line; null follows the team's brand default",
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "powered_by_effective": {
+                "description": "Read-only: whether recipients see the line now. This domain's choice, else the team's, and always true on a plan that cannot hide it",
+                "type": "boolean"
+              },
               "redirect_url": {
                 "type": [
                   "string",
@@ -4170,6 +4293,13 @@
                 ]
               },
               "success_message": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "support_url": {
+                "description": "Support link under the page; null shows none",
                 "type": [
                   "string",
                   "null"
@@ -4187,6 +4317,9 @@
               "message",
               "success_message",
               "redirect_url",
+              "support_url",
+              "powered_by",
+              "powered_by_effective",
               "background_color",
               "text_color",
               "accent_color",
@@ -7668,7 +7801,7 @@
                   ]
                 },
                 "unsubscribe_page": {
-                  "description": "BillionSend extension: this domain's own look for its unsubscribe pages. A null field falls back to the team's default page, then to the built-in default.",
+                  "description": "BillionSend extension: this domain's own look for its unsubscribe pages. A null field falls back to the team's default page, then to the built-in default. On a plan without branding (Free) recipients see the built-in look and logo whatever is saved; the saved look applies again on a paid plan.",
                   "properties": {
                     "accent_color": {
                       "type": [
@@ -7702,7 +7835,7 @@
                       ]
                     },
                     "logo_url": {
-                      "description": "Read-only; uploaded in the dashboard",
+                      "description": "Read-only: this domain's own logo, null when none is uploaded (the page then shows the team's logo) or when this deployment has no logo storage. Set with PUT /domains/{id}/unsubscribe-page/logo, removed with DELETE",
                       "type": [
                         "string",
                         "null"
@@ -7714,6 +7847,17 @@
                         "null"
                       ]
                     },
+                    "powered_by": {
+                      "description": "This domain's own choice for the \"Powered by BillionSend\" line; null follows the team's brand default",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "powered_by_effective": {
+                      "description": "Read-only: whether recipients see the line now. This domain's choice, else the team's, and always true on a plan that cannot hide it",
+                      "type": "boolean"
+                    },
                     "redirect_url": {
                       "type": [
                         "string",
@@ -7721,6 +7865,13 @@
                       ]
                     },
                     "success_message": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "support_url": {
+                      "description": "Support link under the page; null shows none",
                       "type": [
                         "string",
                         "null"
@@ -7738,6 +7889,9 @@
                     "message",
                     "success_message",
                     "redirect_url",
+                    "support_url",
+                    "powered_by",
+                    "powered_by_effective",
                     "background_color",
                     "text_color",
                     "accent_color",
@@ -9691,6 +9845,25 @@
         ],
         "type": "object"
       },
+      "LogoResponse": {
+        "properties": {
+          "logo_url": {
+            "description": "Public URL of the stored logo; it changes on every upload (a cache-buster)",
+            "type": "string"
+          },
+          "object": {
+            "enum": [
+              "logo"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "object",
+          "logo_url"
+        ],
+        "type": "object"
+      },
       "OAuthGrant": {
         "properties": {
           "client": {
@@ -10340,6 +10513,27 @@
         "required": [
           "object",
           "id",
+          "deleted"
+        ],
+        "type": "object"
+      },
+      "RemoveLogoResponse": {
+        "properties": {
+          "deleted": {
+            "enum": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "object": {
+            "enum": [
+              "logo"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "object",
           "deleted"
         ],
         "type": "object"
@@ -11990,13 +12184,64 @@
         },
         "type": "object"
       },
+      "UpdateBrandRequest": {
+        "description": "Fields not sent keep their value.",
+        "properties": {
+          "accent_color": {
+            "description": "Button and link color, #rrggbb; null (or an empty string) clears it",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "company_address": {
+            "description": "Postal address shown in the page's footer, max 200 characters; null (or an empty string) clears it",
+            "maxLength": 200,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "font": {
+            "description": "Page font; null clears it back to the built-in font",
+            "enum": [
+              "geist",
+              "system",
+              "serif",
+              "mono",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "powered_by": {
+            "description": "Show \"Powered by BillionSend\" under the page (true) or hide it (false). A plan that cannot hide it (Free) saves true whatever is sent, as the dashboard does; the response then reads powered_by true and powered_by_locked true",
+            "type": "boolean"
+          },
+          "show_topics": {
+            "description": "List the topics a recipient can switch on the page",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "UpdateBroadcastRequest": {
         "properties": {
+          "dormant_check": {
+            "description": "BillionSend extension: when true (the default), a contact who got 8 or more of your broadcasts and automation emails with no tracked open or click for 120 days (or ever) gets a short \"still want these?\" email with a confirm link instead of this broadcast, and is left out of later broadcasts if it does not confirm or engage within 14 days. Applies only when the sending domain has open or click tracking on. false sends the content to everyone",
+            "type": "boolean"
+          },
           "from": {
             "type": "string"
           },
           "html": {
             "type": "string"
+          },
+          "include_dormant": {
+            "description": "BillionSend extension: true also sends to contacts marked dormant (they did not answer a \"still want these?\" email). Default false",
+            "type": "boolean"
           },
           "name": {
             "type": "string"
@@ -12175,7 +12420,7 @@
             ]
           },
           "unsubscribe_page": {
-            "description": "BillionSend extension: this domain's own look for its unsubscribe pages. Fields not sent keep their value; null clears one, and a cleared field falls back to the team's default page. logo_url is read-only here: the logo is uploaded in the dashboard.",
+            "description": "BillionSend extension: this domain's own look for its unsubscribe pages. Fields not sent keep their value; null clears one, and a cleared field falls back to the team's default page. logo_url is read-only here: upload the logo with PUT /domains/{id}/unsubscribe-page/logo.",
             "properties": {
               "accent_color": {
                 "description": "Button and link color, #rrggbb",
@@ -12221,6 +12466,13 @@
                   "null"
                 ]
               },
+              "powered_by": {
+                "description": "Show \"Powered by BillionSend\" under the page (true) or hide it (false); null follows the team's brand default (GET /brand). A plan that cannot hide it shows it whatever is saved: the value is kept and applies on a plan that can; read powered_by_effective for what recipients see.",
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
               "redirect_url": {
                 "description": "Where the recipient goes after unsubscribing instead of the in-page message; http(s) only",
                 "type": [
@@ -12231,6 +12483,13 @@
               "success_message": {
                 "description": "Text shown once the choice is saved; max 500 characters",
                 "maxLength": 500,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "support_url": {
+                "description": "A support link shown under the page; http(s) only. null shows none (the team has no support link of its own to fall back to)",
                 "type": [
                   "string",
                   "null"
@@ -12772,6 +13031,16 @@
               "enabled",
               "disabled"
             ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UploadLogoForm": {
+        "properties": {
+          "file": {
+            "description": "The image: PNG, JPEG or WebP (judged from its bytes, not its name or type), at most 2 MiB. SVG is not accepted",
+            "format": "binary",
             "type": "string"
           }
         },
@@ -16371,6 +16640,424 @@
         "summary": "Stop an automation",
         "tags": [
           "Automations"
+        ]
+      }
+    },
+    "/brand": {
+      "get": {
+        "description": "BillionSend extension. The team's brand defaults for its hosted unsubscribe pages (the dashboard's Settings → Brand): the logo, accent color, font, footer address and the two footer switches. A domain's own `unsubscribe_page` overrides any of them.",
+        "operationId": "brand.get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Brand"
+                }
+              }
+            },
+            "description": "The brand defaults",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown or revoked API key",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A key held to one domain: the brand belongs to the team as a whole; refused to a sending-only key, a key held to one domain, a key held to one inbox (restricted_api_key)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The team is gone",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Over the rate limit (rate_limit_exceeded, with Retry-After)",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried; sent with rate_limit_exceeded",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "summary": "Retrieve the brand defaults",
+        "tags": [
+          "Brand"
+        ]
+      },
+      "patch": {
+        "description": "BillionSend extension. Changes the team's brand defaults; fields not sent keep their value, null clears one. Needs a key made by an owner or admin (as the dashboard's Brand settings do).",
+        "operationId": "brand.update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBrandRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Brand"
+                }
+              }
+            },
+            "description": "The brand defaults after the change",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown or revoked API key",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Needs a role with manage access, or a key held to one domain (the brand belongs to the team); refused to a sending-only key, a key held to one domain, a key held to one inbox (restricted_api_key)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The team is gone",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Over the rate limit (rate_limit_exceeded, with Retry-After)",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried; sent with rate_limit_exceeded",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "summary": "Update the brand defaults",
+        "tags": [
+          "Brand"
+        ]
+      }
+    },
+    "/brand/logo": {
+      "delete": {
+        "description": "BillionSend extension. Removes the team's logo; pages of domains without a logo of their own then show none. Removing a logo that is not there succeeds. Needs a key made by an owner or admin.",
+        "operationId": "brand.logo.delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoveLogoResponse"
+                }
+              }
+            },
+            "description": "Logo removed",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown or revoked API key",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Needs a role with manage access, or a key held to one domain; refused to a sending-only key, a key held to one domain, a key held to one inbox (restricted_api_key)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "This deployment stores no logos",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Over the rate limit (rate_limit_exceeded, with Retry-After)",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried; sent with rate_limit_exceeded",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "summary": "Remove the team logo",
+        "tags": [
+          "Brand"
+        ]
+      },
+      "put": {
+        "description": "BillionSend extension. Sets the team's logo, the one every domain's unsubscribe page shows unless the domain has its own (PUT /domains/{id}/unsubscribe-page/logo), and the team's picture in the dashboard; it replaces any earlier one. Send the image as `multipart/form-data` in a field named `file`: PNG, JPEG or WebP, judged from the bytes, at most 2 MiB. Needs a key made by an owner or admin.",
+        "operationId": "brand.logo.upload",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadLogoForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoResponse"
+                }
+              }
+            },
+            "description": "Logo stored",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown or revoked API key",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Needs a role with manage access, or a key held to one domain; refused to a sending-only key, a key held to one domain, a key held to one inbox (restricted_api_key)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "This deployment stores no logos",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No file, a file larger than the limit, or not a PNG, JPEG or WebP image",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Over the rate limit (rate_limit_exceeded, with Retry-After)",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried; sent with rate_limit_exceeded",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "summary": "Upload the team logo",
+        "tags": [
+          "Brand"
         ]
       }
     },
@@ -21368,6 +22055,237 @@
           }
         },
         "summary": "Verify a domain claim",
+        "tags": [
+          "Domains"
+        ]
+      }
+    },
+    "/domains/{id}/unsubscribe-page/logo": {
+      "delete": {
+        "description": "BillionSend extension. Removes this domain's own logo; its unsubscribe pages then show the team's logo (GET /brand), or none. Removing a logo that is not there succeeds.",
+        "operationId": "domains.unsubscribePage.logo.delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoveLogoResponse"
+                }
+              }
+            },
+            "description": "Logo removed",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown or revoked API key",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The team's subdomain of the shared domain, which is read-only; refused to a sending-only key, a key held to one inbox (restricted_api_key)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found, a domain other than the one the calling key is held to, or this deployment stores no logos",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Over the rate limit (rate_limit_exceeded, with Retry-After)",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried; sent with rate_limit_exceeded",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "summary": "Remove a domain's unsubscribe page logo",
+        "tags": [
+          "Domains"
+        ]
+      },
+      "put": {
+        "description": "BillionSend extension. Sets this domain's own logo on its unsubscribe pages, replacing any earlier one; send the image as `multipart/form-data` in a field named `file`. PNG, JPEG or WebP, judged from the bytes, at most 2 MiB. Afterwards `unsubscribe_page.logo_url` on Retrieve a domain returns the new address. A domain without a logo of its own shows the team's (PUT /brand/logo). On a plan without branding (Free) recipients see the built-in look until the team upgrades.",
+        "operationId": "domains.unsubscribePage.logo.upload",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadLogoForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoResponse"
+                }
+              }
+            },
+            "description": "Logo stored",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown or revoked API key",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The team's subdomain of the shared domain, which is read-only; refused to a sending-only key, a key held to one inbox (restricted_api_key)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found, a domain other than the one the calling key is held to, or this deployment stores no logos",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No file, a file larger than the limit, or not a PNG, JPEG or WebP image",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Over the rate limit (rate_limit_exceeded, with Retry-After)",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried; sent with rate_limit_exceeded",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "summary": "Upload a domain's unsubscribe page logo",
         "tags": [
           "Domains"
         ]
@@ -36771,6 +37689,9 @@
     },
     {
       "name": "Verifications"
+    },
+    {
+      "name": "Brand"
     },
     {
       "name": "Logs"

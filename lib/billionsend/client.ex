@@ -148,7 +148,10 @@ defmodule BillionSend.Client do
         timeout: call_timeout!(client, Keyword.get(opts, :timeout))
       }
 
-      attempt(client, req, keyed?, 0)
+      # An upload is not repeated after a 5xx or a lost connection unless it carries an
+      # idempotency key, whatever its method (a 429 is still retried).
+      retry_method = if Keyword.get(opts, :multipart), do: "POST", else: method
+      attempt(client, req, keyed?, retry_method, 0)
     end
   end
 
@@ -182,7 +185,7 @@ defmodule BillionSend.Client do
 
   defp objects(other), do: other
 
-  defp attempt(client, req, keyed?, n) do
+  defp attempt(client, req, keyed?, retry_method, n) do
     {module, state} = client.transport
 
     result =
@@ -193,13 +196,13 @@ defmodule BillionSend.Client do
       end
 
     with {:error, error} <- result do
-      case retry_delay(client, n, error, req.method, keyed?) do
+      case retry_delay(client, n, error, retry_method, keyed?) do
         nil ->
           {:error, error}
 
         seconds ->
           client.sleep.(round(seconds * 1000))
-          attempt(client, req, keyed?, n + 1)
+          attempt(client, req, keyed?, retry_method, n + 1)
       end
     end
   end

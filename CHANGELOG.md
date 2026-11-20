@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 (2026-11-20)
+
+Snapshot synced to the published API (`https://billionsend.com/docs/api.openapi.json`, now 186 operations).
+
+- New: `BillionSend.Brand` (`get`, `update`) and `BillionSend.Brand.Logo` (`upload`, `delete`): the team's brand defaults for the hosted unsubscribe pages (`logo_url`, `accent_color`, `font`, `company_address`, `powered_by`, `show_topics`, and the read-only `powered_by_locked` and `branding_locked`). Writes need a key made by an owner or admin; a domain-scoped key is refused with `403` `restricted_api_key`.
+- New: `BillionSend.Domains.UnsubscribePage.Logo.upload/4` and `.delete/3`: a domain's own logo on its unsubscribe pages.
+- A logo upload is a `multipart/form-data` form with the image in `file`, as `{filename, content, content_type}` (PNG, JPEG or WebP, judged from the bytes, at most 2 MiB; `404` when the deployment has no logo storage, `422` for a refused file). It answers `%{"object" => "logo", "logo_url" => url}`; `delete` answers `%{"object" => "logo", "deleted" => true}`.
+- A multipart upload is no longer repeated after a 5xx or a lost connection, whatever its method (the two logo uploads are `PUT`), unless it carries an idempotency key; a 429 is still retried, with the same form.
+- `Domains.update/4`: `unsubscribe_page:` takes `support_url` (http or https, `nil` clears) and `powered_by` (`true`, `false`, or `nil` to follow the team's default). A domain's `unsubscribe_page` answers `support_url`, `powered_by`, the read-only `powered_by_effective` (whether recipients really see the line; always `true` on Free) and a `logo_url` that is `nil` when no logo storage is configured.
+- Broadcasts: `Broadcasts.create/3` and `update/4` take `include_dormant` and `dormant_check` (the dormant-contact check, on by default), and a broadcast answers both as booleans.
+- README: the logo uploads and the brand update, with the resource table.
+
 ## 0.2.2 (2026-11-19)
 
 Snapshot synced to the published API (`https://billionsend.com/docs/api.openapi.json`, still 180 operations).

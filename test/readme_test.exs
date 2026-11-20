@@ -35,6 +35,7 @@ defmodule BillionSend.ReadmeTest do
     "{:ok, events} = BillionSend.Inboxes.Events.stream(client, last_event_id: saved_position)",
     "# Phoenix: keep the raw body (a Plug.Parsers :body_reader that stores it in conn.assigns)",
     "{:ok, upload} =",
+    "{:ok, logo} =",
     "client",
     "case BillionSend.Domains.get(client, \"6a1f1d38-3c55-4a4e-9a57-0f2b3c4d5e6f\") do"
   ]
@@ -334,6 +335,47 @@ defmodule BillionSend.ReadmeTest do
            }
 
     assert get.path_params == %{"id" => import_id}
+    assert Mock.violations(mock) == []
+  end
+
+  test "the logo uploads send their files and the brand update its fields", %{
+    mock: mock,
+    client: client
+  } do
+    tmp = Path.join(System.tmp_dir!(), "billionsend-readme-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(tmp)
+    png = <<0x89, "PNG\r\n", 0x1A, "\n", 0, 0, 0, 13, "IHDR">>
+    File.write!(Path.join(tmp, "logo.png"), png)
+    File.write!(Path.join(tmp, "acme.png"), png)
+    cwd = File.cwd!()
+    domain_id = Requests.uuid(3)
+    url = "https://assets.billionsend.com/logos/team/3f2a.png"
+
+    Mock.respond(mock, "PUT", "/brand/logo", 200, json: %{"object" => "logo", "logo_url" => url})
+    answer(mock, "PUT", "/domains/{id}/unsubscribe-page/logo")
+
+    answer(
+      mock,
+      "PATCH",
+      "/brand",
+      &Map.merge(&1, %{"accent_color" => "#2B44FF", "powered_by" => false})
+    )
+
+    try do
+      File.cd!(tmp)
+      {_, binding} = run(block("{:ok, logo} ="), client: client, domain_id: domain_id)
+      assert binding[:logo]["logo_url"] == url
+      assert binding[:brand]["accent_color"] == "#2B44FF"
+    after
+      File.cd!(cwd)
+      File.rm_rf!(tmp)
+    end
+
+    [brand_logo, domain_logo, update] = Mock.calls(mock)
+    assert brand_logo.body["file"] == png
+    assert domain_logo.path_params == %{"id" => domain_id}
+    assert domain_logo.body["file"] == png
+    assert update.body == %{"accent_color" => "#2B44FF", "powered_by" => false}
     assert Mock.violations(mock) == []
   end
 

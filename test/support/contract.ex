@@ -63,6 +63,10 @@ defmodule BillionSend.Test.Contract do
       end
     end
 
+    # A file upload (multipart/form-data) is never repeated after a 5xx or a lost connection.
+    def upload?(op),
+      do: Map.has_key?(get_in(op.spec, ["requestBody", "content"]) || %{}, "multipart/form-data")
+
     def idempotency_key?(op),
       do: Enum.any?(params(op, "header"), &(String.downcase(&1["name"]) == "idempotency-key"))
   end

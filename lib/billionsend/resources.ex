@@ -737,6 +737,110 @@ defmodule BillionSend.Automations.Runs do
   end
 end
 
+defmodule BillionSend.Brand do
+  @moduledoc """
+  Operations on brand. See also `BillionSend.Brand.Logo`.
+  """
+  @doc """
+  Retrieve the brand defaults.
+
+  BillionSend extension. The team's brand defaults for its hosted unsubscribe pages (the dashboard's Settings → Brand): the logo, accent color, font, footer address and the two footer switches. A domain's own `unsubscribe_page` overrides any of them.
+
+  `GET /brand`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec get(BillionSend.Client.t(), keyword()) :: {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def get(client, opts \\ []) do
+    BillionSend.Client.call(client, "GET", "/brand", opts, [])
+  end
+
+  @doc "Like `get/2`, but returns the answer or raises."
+  @spec get!(BillionSend.Client.t(), keyword()) :: term()
+  def get!(client, opts \\ []) do
+    BillionSend.Client.unwrap!(get(client, opts))
+  end
+
+  @doc """
+  Update the brand defaults.
+
+  BillionSend extension. Changes the team's brand defaults; fields not sent keep their value, null clears one. Needs a key made by an owner or admin (as the dashboard's Brand settings do).
+
+  `PATCH /brand`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec update(BillionSend.Client.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def update(client, params \\ nil, opts \\ []) do
+    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
+    BillionSend.Client.call(client, "PATCH", "/brand", opts, body: params)
+  end
+
+  @doc "Like `update/3`, but returns the answer or raises."
+  @spec update!(BillionSend.Client.t(), map() | list() | nil, keyword()) :: term()
+  def update!(client, params \\ nil, opts \\ []) do
+    BillionSend.Client.unwrap!(update(client, params, opts))
+  end
+end
+
+defmodule BillionSend.Brand.Logo do
+  @moduledoc """
+  Operations on brand logo.
+  """
+  @doc """
+  Upload the team logo.
+
+  BillionSend extension. Sets the team's logo, the one every domain's unsubscribe page shows unless the domain has its own (PUT /domains/{id}/unsubscribe-page/logo), and the team's picture in the dashboard; it replaces any earlier one. Send the image as `multipart/form-data` in a field named `file`: PNG, JPEG or WebP, judged from the bytes, at most 2 MiB. Needs a key made by an owner or admin.
+
+  Sent as `multipart/form-data`: `params` holds the form's fields. A file is `{filename, content}` or `{filename, content, content_type}`; a map or list is sent as its JSON text; see `BillionSend.Multipart`.
+
+  `PUT /brand/logo`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec upload(BillionSend.Client.t(), map() | keyword(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def upload(client, params, opts \\ []) do
+    BillionSend.Client.call(client, "PUT", "/brand/logo", opts, multipart: params)
+  end
+
+  @doc "Like `upload/3`, but returns the answer or raises."
+  @spec upload!(BillionSend.Client.t(), map() | keyword(), keyword()) :: term()
+  def upload!(client, params, opts \\ []) do
+    BillionSend.Client.unwrap!(upload(client, params, opts))
+  end
+
+  @doc """
+  Remove the team logo.
+
+  BillionSend extension. Removes the team's logo; pages of domains without a logo of their own then show none. Removing a logo that is not there succeeds. Needs a key made by an owner or admin.
+
+  `DELETE /brand/logo`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec delete(BillionSend.Client.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def delete(client, opts \\ []) do
+    BillionSend.Client.call(client, "DELETE", "/brand/logo", opts, [])
+  end
+
+  @doc "Like `delete/2`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), keyword()) :: term()
+  def delete!(client, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, opts))
+  end
+end
+
 defmodule BillionSend.Broadcasts do
   @moduledoc """
   Operations on broadcasts.
@@ -1801,7 +1905,7 @@ end
 
 defmodule BillionSend.Domains do
   @moduledoc """
-  Operations on domains. See also `BillionSend.Domains.Claims`.
+  Operations on domains. See also `BillionSend.Domains.Claims`, `BillionSend.Domains.UnsubscribePage`.
   """
   @doc """
   List domains.
@@ -2058,6 +2162,77 @@ defmodule BillionSend.Domains.Claims do
   @spec verify!(BillionSend.Client.t(), String.t(), keyword()) :: term()
   def verify!(client, id, opts \\ []) do
     BillionSend.Client.unwrap!(verify(client, id, opts))
+  end
+end
+
+defmodule BillionSend.Domains.UnsubscribePage do
+  @moduledoc """
+  Operations on domains unsubscribe page. See also `BillionSend.Domains.UnsubscribePage.Logo`.
+  """
+end
+
+defmodule BillionSend.Domains.UnsubscribePage.Logo do
+  @moduledoc """
+  Operations on domains unsubscribe page logo.
+  """
+  @doc """
+  Upload a domain's unsubscribe page logo.
+
+  BillionSend extension. Sets this domain's own logo on its unsubscribe pages, replacing any earlier one; send the image as `multipart/form-data` in a field named `file`. PNG, JPEG or WebP, judged from the bytes, at most 2 MiB. Afterwards `unsubscribe_page.logo_url` on Retrieve a domain returns the new address. A domain without a logo of its own shows the team's (PUT /brand/logo). On a plan without branding (Free) recipients see the built-in look until the team upgrades.
+
+  Sent as `multipart/form-data`: `params` holds the form's fields. A file is `{filename, content}` or `{filename, content, content_type}`; a map or list is sent as its JSON text; see `BillionSend.Multipart`.
+
+  `PUT /domains/{id}/unsubscribe-page/logo`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec upload(BillionSend.Client.t(), String.t(), map() | keyword(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def upload(client, id, params, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "PUT",
+      "/domains/#{BillionSend.Client.encode_path(id)}/unsubscribe-page/logo",
+      opts,
+      multipart: params
+    )
+  end
+
+  @doc "Like `upload/4`, but returns the answer or raises."
+  @spec upload!(BillionSend.Client.t(), String.t(), map() | keyword(), keyword()) :: term()
+  def upload!(client, id, params, opts \\ []) do
+    BillionSend.Client.unwrap!(upload(client, id, params, opts))
+  end
+
+  @doc """
+  Remove a domain's unsubscribe page logo.
+
+  BillionSend extension. Removes this domain's own logo; its unsubscribe pages then show the team's logo (GET /brand), or none. Removing a logo that is not there succeeds.
+
+  `DELETE /domains/{id}/unsubscribe-page/logo`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec delete(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def delete(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/domains/#{BillionSend.Client.encode_path(id)}/unsubscribe-page/logo",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `delete/3`, but returns the answer or raises."
+  @spec delete!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def delete!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(delete(client, id, opts))
   end
 end
 
@@ -5991,6 +6166,8 @@ defmodule BillionSend.Resources do
       BillionSend.Audiences.Contacts,
       BillionSend.Automations,
       BillionSend.Automations.Runs,
+      BillionSend.Brand,
+      BillionSend.Brand.Logo,
       BillionSend.Broadcasts,
       BillionSend.ContactProperties,
       BillionSend.Contacts,
@@ -6001,6 +6178,8 @@ defmodule BillionSend.Resources do
       BillionSend.Deliverability,
       BillionSend.Domains,
       BillionSend.Domains.Claims,
+      BillionSend.Domains.UnsubscribePage,
+      BillionSend.Domains.UnsubscribePage.Logo,
       BillionSend.Emails,
       BillionSend.Emails.Attachments,
       BillionSend.Emails.Metrics,

@@ -2,7 +2,7 @@
 
 The official Elixir client for the [BillionSend](https://billionsend.com) API: send and receive email, run inboxes for agents and people, manage domains, contacts, broadcasts, templates, webhooks and more.
 
-- Every operation of the API (180), named after the API's own `operationId`s.
+- Every operation of the API (186), named after the API's own `operationId`s.
 - No dependencies: OTP's `:httpc` and `:ssl`, and Elixir's built-in `JSON`.
 - Sends that never go out twice, retries, lazy paging streams, live event streams that resume where they stopped, and webhook signature verification.
 
@@ -12,7 +12,7 @@ Documentation: https://billionsend.com/docs.
 
 ```elixir
 def deps do
-  [{:billionsend, "~> 0.2"}]
+  [{:billionsend, "~> 0.3"}]
 end
 ```
 
@@ -26,7 +26,7 @@ client = BillionSend.client()  # reads BILLIONSEND_API_KEY
 {:ok, email} =
   BillionSend.Emails.send(client, %{
     from: "Acme <hello@acme.dev>",
-    to: ["ada@example.com"],
+    to: ["success@simulator.amazonses.com"],
     subject: "Welcome to Acme",
     html: "<p>Thanks for signing up!</p>"
   })
@@ -138,7 +138,8 @@ end
 | `BillionSend.Emails` (`.Attachments`) | send, batch, list, get, update, cancel, delete, share, unshare, insights, metrics; `Attachments.list`, `Attachments.get` |
 | `BillionSend.Emails.Metrics` | links, countries, clients |
 | `BillionSend.Emails.Receiving` (`.Attachments`) | received mail: list, get, delete, reply, forward; attachments and their extracted text |
-| `BillionSend.Domains` (`.Claims`) | create, list, get, update, delete, verify; `Claims.create`, `Claims.get`, `Claims.verify` |
+| `BillionSend.Domains` (`.Claims`, `.UnsubscribePage.Logo`) | create, list, get, update, delete, verify; `Claims.create`, `Claims.get`, `Claims.verify`; `UnsubscribePage.Logo.upload`, `UnsubscribePage.Logo.delete` for the domain's own unsubscribe-page logo (its look, `support_url` and `powered_by` are set through `update` with `unsubscribe_page:`) |
+| `BillionSend.Brand` (`.Logo`) | the team's brand defaults for the hosted unsubscribe pages: `get`, `update`; `Logo.upload`, `Logo.delete` |
 | `BillionSend.ApiKeys` | create, list, update, delete |
 | `BillionSend.Contacts` (`.Topics`, `.Segments`, `.Batch`, `.Imports`) | create, list, get, update, delete, preferences_link; `Segments.list`; `Batch.create`, `Batch.get`, `Batch.remove`; CSV uploads with `Imports.create`, `Imports.list`, `Imports.get` |
 | `BillionSend.Audiences.Contacts` | contacts addressed through an audience |
@@ -157,7 +158,7 @@ end
 | `BillionSend.Inboxes.Threads` (`.Labels`, `.Emails`) | list, search, get, update, delete; thread labels; messages, reply and forward |
 | `BillionSend.Agent` | signup, status, claim_email |
 
-A CSV import is the one operation that takes a file: `BillionSend.Contacts.Imports.create/3` sends a `multipart/form-data` form, a file as `{filename, content}`, and a map or list field (`column_map`, `segments`, `topics`) as its JSON text. It queues the import; poll `Imports.get` for its `status` and `counts`:
+Three kinds of operation take a file: a CSV import and the two logo uploads. They send a `multipart/form-data` form, a file as `{filename, content}` (or `{filename, content, content_type}`), and a map or list field (`column_map`, `segments`, `topics`) as its JSON text. It queues the import; poll `Imports.get` for its `status` and `counts`:
 
 ```elixir
 {:ok, upload} =
@@ -168,6 +169,20 @@ A CSV import is the one operation that takes a file: `BillionSend.Contacts.Impor
   })
 
 {:ok, upload} = BillionSend.Contacts.Imports.get(client, upload["id"])
+```
+
+A logo goes in the form's `file` field (PNG, JPEG or WebP, at most 2 MiB; the API judges the type from the bytes). `Brand.Logo.upload/3` sets the team's logo, `Domains.UnsubscribePage.Logo.upload/4` one domain's own; both answer `%{"object" => "logo", "logo_url" => url}`, and `delete` answers `%{"object" => "logo", "deleted" => true}`:
+
+```elixir
+{:ok, logo} =
+  BillionSend.Brand.Logo.upload(client, %{file: {"logo.png", File.read!("logo.png"), "image/png"}})
+
+{:ok, _} =
+  BillionSend.Domains.UnsubscribePage.Logo.upload(client, domain_id, %{
+    file: {"acme.png", File.read!("acme.png"), "image/png"}
+  })
+
+{:ok, brand} = BillionSend.Brand.update(client, %{accent_color: "#2B44FF", powered_by: false})
 ```
 
 Each function is named after its operation's `operationId` in the API document: the groups make the module, the last segment the function, camelCase written in snake_case. `emails.receiving.attachments.list` is `BillionSend.Emails.Receiving.Attachments.list/3` and `agent.claimEmail` is `BillionSend.Agent.claim_email/2`. An `operationId` that is also the group of others needs nothing special in Elixir, since a module and a function of the same name live side by side: `emails.metrics` is `BillionSend.Emails.metrics/2` and `emails.metrics.links` is `BillionSend.Emails.Metrics.links/2`.
@@ -217,7 +232,7 @@ An answer that is not JSON keeps the same shape, with `name` set to `"applicatio
 
 ## Retries
 
-A 429 is retried for every method: the API refuses before it writes anything. Otherwise a request is retried when repeating it is safe: GET, PUT and DELETE, and any request carrying an idempotency key (every send does), on 5xx, when no answer came back (connection failure, timeout), and, for a keyed request, on 409 `concurrent_idempotent_requests` (a retry that caught the first attempt still running). The wait is the answer's `Retry-After` when there is one, otherwise exponential backoff with jitter (0.5 s, 1 s, 2 s… up to 8 s). An answer asking to wait more than 60 seconds, such as a used-up daily quota, is returned at once. `max_retries:` (default 2) bounds the retries of one call; `0` turns them off. The calling process sleeps between attempts.
+A 429 is retried for every method: the API refuses before it writes anything. Otherwise a request is retried when repeating it is safe: GET, PUT and DELETE (a file upload, a PUT included, is not: it is repeated only with an idempotency key), and any request carrying an idempotency key (every send does), on 5xx, when no answer came back (connection failure, timeout), and, for a keyed request, on 409 `concurrent_idempotent_requests` (a retry that caught the first attempt still running). The wait is the answer's `Retry-After` when there is one, otherwise exponential backoff with jitter (0.5 s, 1 s, 2 s… up to 8 s). An answer asking to wait more than 60 seconds, such as a used-up daily quota, is returned at once. `max_retries:` (default 2) bounds the retries of one call; `0` turns them off. The calling process sleeps between attempts.
 
 ## Configuration
 
@@ -239,7 +254,7 @@ scripts/test.sh   # generate --check, format, compile, test and the coverage gat
 
 The SDK is built from a snapshot of the API's OpenAPI document, `openapi/api.openapi.json`. The snapshot is the contract: `scripts/generate.exs` writes `lib/billionsend/resources.ex` from it (module and function names from each `operationId`, idempotency keys where an operation declares the `Idempotency-Key` header, streams for cursor lists), and the tests hold the SDK to it:
 
-- `test/operations_test.exs` runs every operation (180) through a contract mock and through the SDK's default transport on a real local socket, with only what the operation requires and with every parameter and body field it has; what the SDK sends is compared with what the document says it must send (path, query, headers, body), the answer is the document's own example or one built from its schema and must come back unchanged, and every kind of failure is followed. Every answer and every request is also validated against the document's schemas (`test/support/contract.ex`).
+- `test/operations_test.exs` runs every operation (186) through a contract mock and through the SDK's default transport on a real local socket, with only what the operation requires and with every parameter and body field it has; what the SDK sends is compared with what the document says it must send (path, query, headers, body), the answer is the document's own example or one built from its schema and must come back unchanged, and every kind of failure is followed. Every answer and every request is also validated against the document's schemas (`test/support/contract.ex`).
 - `test/wire_test.exs` runs the default transport against real sockets, plain and TLS: headers, bodies, every kind of answer, event streams in every framing, certificate checks.
 - `test/readme_test.exs` runs every code block of this README as written, against a local server that answers by the contract; a block that is added to the README and not to the test fails it.
 - `test/client_test.exs`, `retries_test.exs`, `errors_test.exs`, `pagination_test.exs`, `streaming_test.exs`, `webhook_test.exs` and `new_operations_test.exs` cover the runtime: client options, retries and `Retry-After`, the error shapes, paging, the event stream and its decoder, webhook verification, uploads.
