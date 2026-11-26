@@ -12,11 +12,11 @@ Documentation: https://billionsend.com/docs.
 
 ```elixir
 def deps do
-  [{:billionsend, "~> 0.3"}]
+  [{:billionsend, "~> 0.2"}]
 end
 ```
 
-Elixir 1.18 or newer, OTP 25 or newer.
+Elixir 1.18 or newer, OTP 25 or newer. `BillionSend.Brand` and the unsubscribe-page logo functions (`Domains.UnsubscribePage.Logo`) were added in 0.3.0; every other function in this README is in 0.2.2.
 
 ## Quick start
 
@@ -34,7 +34,7 @@ client = BillionSend.client()  # reads BILLIONSEND_API_KEY
 IO.puts(email["id"])
 ```
 
-Every function returns `{:ok, answer}` or `{:error, error}`; its `!` twin (`BillionSend.Emails.send!/3`) returns the answer or raises. The answer is the API's JSON decoded into plain Elixir terms: maps with string keys (`email["id"]`), lists and scalars as JSON has them. There are no structs for answers in this version; the fields of every answer are in the API reference at https://billionsend.com/docs.
+Every function returns `{:ok, answer}` or `{:error, error}`; its `!` twin (`BillionSend.Emails.send!/3`) returns the answer or raises. The answer is the API's JSON decoded into plain Elixir terms: maps with string keys (`email["id"]`), lists and scalars as JSON has them. Answers are not structs; the fields of every answer are in the API reference at https://billionsend.com/docs.
 
 A client is a plain struct: build it once and pass it to every call, from any process.
 
@@ -58,7 +58,7 @@ Every sending function (`Emails.send`, `Emails.batch`, `Emails.Receiving.reply` 
 BillionSend.Emails.send(client, message, idempotency_key: "welcome/#{user.id}")
 ```
 
-Repeating a key with the same request returns the first answer; the same key with a different request is refused (`BillionSend.ConflictError`, `invalid_idempotent_request`). The API keeps keys for 24 hours.
+A key is 1 to 256 characters. Repeating a key with the same request returns the first answer; the same key with a different request is refused (`BillionSend.ConflictError`, `invalid_idempotent_request`). The API keeps keys for 24 hours.
 
 ## An agent that answers its inbox
 
@@ -100,7 +100,7 @@ Waiting for a sign-in code sent to the inbox is one call: `BillionSend.Inboxes.C
 - `BillionSend.InboxStreamEvent`: `id` (the stream position), `event` (such as `"inbox.email.received"`) and `data`, a map with `"type"`, `"created_at"`, `"inbox_id"` and `"data"` (the webhook payload of the same event).
 - `BillionSend.StreamGapEvent`: `event: "stream.gap"`, `id: nil`, and `data["reason"]` says why. The stream was resumed from a position older than the 24 hours the API replays, so some events may be missing: catch up through the lists (`BillionSend.Inboxes.Threads.list_all(client, inbox_id, read: false)`) before going on. It is handed out once per position.
 
-The server ends a stream every few minutes and connections drop; the stream reconnects on its own with `Last-Event-ID`, so no event is lost or repeated. Before reconnecting it waits a second (or what the server's `retry` field asks). A connection that opens starts the count again, so a quiet inbox that gets only keepalives keeps its stream however long it waits; A reconnect the API answers with a 429 or 5xx waits what its `Retry-After` asks (one over 60 seconds raises that error at once). `max_reconnects:` (default 5) bounds the reconnects in a row that fail to open: past it, the enumeration raises the API's error for the last one (`BillionSend.RateLimitError`, `BillionSend.APIError`), or `BillionSend.APIConnectionError` ("gave up after N reconnects") when it got no answer. A reconnect the API refuses for good, such as a revoked key, raises its own error. One inbox's stream always carries that inbox's `inbox.deleted` and `inbox.expired` events, whatever `types:` names, and ends after one of them. Enumerate a stream once, in the process that opened it; halting the enumeration (`Enum.take/2`, `Stream.take_while/2`, a `throw` out of the loop) closes the connection.
+The server ends a stream every few minutes and connections drop; the stream reconnects on its own with `Last-Event-ID`, so no event is lost or repeated. Before reconnecting it waits a second (or what the server's `retry` field asks). A connection that opens starts the count again, so a quiet inbox that gets only keepalives keeps its stream however long it waits. A reconnect the API answers with a 429 or 5xx waits what its `Retry-After` asks (one over 60 seconds raises that error at once). `max_reconnects:` (default 5) bounds the reconnects in a row that fail to open: past it, the enumeration raises the API's error for the last one (`BillionSend.RateLimitError`, `BillionSend.APIError`), or `BillionSend.APIConnectionError` ("gave up after N reconnects") when it got no answer. A reconnect the API refuses for good, such as a revoked key, raises its own error. One inbox's stream always carries that inbox's `inbox.deleted` and `inbox.expired` events, whatever `types:` names, and ends after one of them. Enumerate a stream once, in the process that opened it; halting the enumeration (`Enum.take/2`, `Stream.take_while/2`, a `throw` out of the loop) closes the connection.
 
 To pick up where a process left off, keep the `id` of the last `InboxStreamEvent` you handled and pass it back:
 
@@ -141,7 +141,7 @@ end
 | `BillionSend.Domains` (`.Claims`, `.UnsubscribePage.Logo`) | create, list, get, update, delete, verify; `Claims.create`, `Claims.get`, `Claims.verify`; `UnsubscribePage.Logo.upload`, `UnsubscribePage.Logo.delete` for the domain's own unsubscribe-page logo (its look, `support_url` and `powered_by` are set through `update` with `unsubscribe_page:`) |
 | `BillionSend.Brand` (`.Logo`) | the team's brand defaults for the hosted unsubscribe pages: `get`, `update`; `Logo.upload`, `Logo.delete` |
 | `BillionSend.ApiKeys` | create, list, update, delete |
-| `BillionSend.Contacts` (`.Topics`, `.Segments`, `.Batch`, `.Imports`) | create, list, get, update, delete, preferences_link; `Segments.list`; `Batch.create`, `Batch.get`, `Batch.remove`; CSV uploads with `Imports.create`, `Imports.list`, `Imports.get` |
+| `BillionSend.Contacts` (`.Topics`, `.Segments`, `.Batch`, `.Imports`) | create, list, get, update, delete, preferences_link; `Segments.list`, `Segments.add`, `Segments.remove`; `Topics.list`, `Topics.update`; `Batch.create`, `Batch.get`, `Batch.remove`; CSV uploads with `Imports.create`, `Imports.list`, `Imports.get` |
 | `BillionSend.Audiences.Contacts` | contacts addressed through an audience |
 | `BillionSend.ContactProperties`, `.Segments` (`.Contacts`), `.Topics` | contact data and grouping |
 | `BillionSend.Broadcasts` | create, list, get, update, delete, send, duplicate, cancel, recipients, clicked_links |
@@ -158,7 +158,7 @@ end
 | `BillionSend.Inboxes.Threads` (`.Labels`, `.Emails`) | list, search, get, update, delete; thread labels; messages, reply and forward |
 | `BillionSend.Agent` | signup, status, claim_email |
 
-Three kinds of operation take a file: a CSV import and the two logo uploads. They send a `multipart/form-data` form, a file as `{filename, content}` (or `{filename, content, content_type}`), and a map or list field (`column_map`, `segments`, `topics`) as its JSON text. It queues the import; poll `Imports.get` for its `status` and `counts`:
+Three kinds of operation take a file: a CSV import and the two logo uploads. They send a `multipart/form-data` form, a file as `{filename, content}` (or `{filename, content, content_type}`), and a map or list field (`column_map`, `segments`, `topics`) as its JSON text. It queues the import (the file is at most 20 MiB); poll `Imports.get` for its `status` and `counts`:
 
 ```elixir
 {:ok, upload} =
@@ -188,6 +188,8 @@ A logo goes in the form's `file` field (PNG, JPEG or WebP, at most 2 MiB; the AP
 Each function is named after its operation's `operationId` in the API document: the groups make the module, the last segment the function, camelCase written in snake_case. `emails.receiving.attachments.list` is `BillionSend.Emails.Receiving.Attachments.list/3` and `agent.claimEmail` is `BillionSend.Agent.claim_email/2`. An `operationId` that is also the group of others needs nothing special in Elixir, since a module and a function of the same name live side by side: `emails.metrics` is `BillionSend.Emails.metrics/2` and `emails.metrics.links` is `BillionSend.Emails.Metrics.links/2`.
 
 Arguments come in this order: the client, the path parameters (`BillionSend.Domains.get(client, domain_id)`; a `nil` or empty one raises `ArgumentError` instead of calling the whole collection), the request body as a map, or a keyword list, which is sent as an object (`BillionSend.Domains.create(client, %{name: "acme.dev"})`), then a keyword list of options: the query and header parameters (`BillionSend.Emails.list(client, limit: 50)`; a list parameter takes a list), `:extra_headers` and `:timeout`. A body the operation does not require may be left out (`BillionSend.Domains.verify(client, domain_id)`). An unknown option, or a missing required one, raises `ArgumentError` before anything is sent. Anything the functions do not cover goes through `BillionSend.Client.request(client, "GET", "/path", query: [...])`.
+
+The functions cover all 186 operations of the published OpenAPI document, but they are built from the snapshot in `openapi/api.openapi.json`, which as of 26 November 2026 is behind the published document in a few fields: the `note` of a suppression (set on `Suppressions.create` and `Suppressions.Batch.add`, returned by `Suppressions.get` and `Suppressions.list`) and `sending_limits` in a domain's answer. Request bodies and answers are plain maps, so those fields are sent and returned as they are; the functions' own documentation and the contract tests do not know them.
 
 ## Pagination
 
@@ -276,7 +278,7 @@ mix run --no-start scripts/branch_coverage.exs cover/all.coverdata --list
 BILLIONSEND_E2E_API_KEY=bs_... mix e2e
 ```
 
-Every request is checked against the published OpenAPI document (`https://billionsend.com/docs/api.openapi.json`, downloaded at the start) before it is sent, and every answer after it is received, so a snapshot that has fallen behind the API fails here. The suite is written for a real account: it only reads what exists, creates objects named `sdk-e2e-elixir-<random>` and deletes them again (also when a test fails), sends at most 20 emails, only to `success@simulator.amazonses.com` and its plus-aliases and from the address `SDK E2E <sdk-e2e@mail.billionsend.dev>` (which the account must have a verified domain for), makes at most 150 requests, one a second, and stops on a second 429 in a row. It creates no domain, sends no broadcast, unsubscribes nobody and uses no inbox. The README examples that can run under these rules run there as written; the end of `test/e2e/live_test.exs` lists what cannot, and why.
+Every request is checked against the published OpenAPI document (`https://billionsend.com/docs/api.openapi.json`, downloaded at the start) before it is sent, and every answer after it is received, so a snapshot that has fallen behind the API fails here. The suite is written for a real account: it only reads what exists, creates objects named `sdk-e2e-elixir-<random>` and deletes them again (also when a test fails), sends at most 20 emails, only to `success@simulator.amazonses.com` and its plus-aliases and from one fixed sender address, on a domain the account must have verified (see `@sender` in `test/e2e/live_test.exs`), makes at most 150 requests, one a second, and stops on a second 429 in a row. It creates no domain, sends no broadcast, unsubscribes nobody and uses no inbox. The README examples that can run under these rules run there as written; the end of `test/e2e/live_test.exs` lists what cannot, and why.
 
 When the API changes:
 
@@ -293,7 +295,7 @@ Whatever fails is what the SDK has to follow. CI runs `scripts/generate.exs --ch
 Publishing is manual; nothing is published on push.
 
 1. On hex.pm, the owner of the `billionsend` package creates an API key with the `api:write` permission (Dashboard → Keys) and stores it in this repository as the `HEX_API_KEY` secret of the `hex` environment (Settings → Environments).
-2. Set `@version` in `mix.exs`, turn the changelog's `Unreleased` heading into that version, commit, then tag and push: `git tag v0.2.0 && git push origin main v0.2.0`.
+2. Set `@version` in `mix.exs`, turn the changelog's `Unreleased` heading into that version, commit, then tag and push: `git tag v<version> && git push origin main v<version>`.
 3. Actions → `release` → Run workflow, on the version tag. The workflow refuses a branch or a tag that differs from the version in `mix.exs`, runs every check, and publishes the package with `mix hex.publish package`.
 
 The same release from a clean checkout of the tag is `HEX_API_KEY=… mix hex.publish package --yes`.

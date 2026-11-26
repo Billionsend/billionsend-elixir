@@ -20,6 +20,7 @@ defmodule BillionSend.ApiChangesTest do
     "removable" => true,
     "origin" => "manual",
     "source_id" => nil,
+    "note" => "Spam trap domain",
     "created_at" => "2026-11-19T09:00:00.000Z"
   }
 
@@ -32,6 +33,7 @@ defmodule BillionSend.ApiChangesTest do
     "removable" => false,
     "origin" => "bounce",
     "source_id" => nil,
+    "note" => nil,
     "created_at" => "2026-11-19T09:00:00.000Z"
   }
 
@@ -93,6 +95,31 @@ defmodule BillionSend.ApiChangesTest do
                "domains" => ["blocked.example"],
                "origin" => "manual"
              }
+    end
+
+    test "a note goes with a create and a batch add, and every entry answers its own" do
+      {client, mock} = client()
+      Mock.respond(mock, "POST", "/suppressions", 201, json: @domain_entry)
+
+      Mock.respond(mock, "POST", "/suppressions/batch/add", 200,
+        json: list_page([@domain_entry, @email_entry], false)
+      )
+
+      assert {:ok, %{"note" => "Spam trap domain"}} =
+               BillionSend.Suppressions.create(client, %{
+                 domain: "blocked.example",
+                 note: "Spam trap domain"
+               })
+
+      assert {:ok, %{"data" => [%{"note" => "Spam trap domain"}, %{"note" => nil}]}} =
+               BillionSend.Suppressions.Batch.add(client, %{
+                 emails: ["ada@example.com"],
+                 note: "Reported"
+               })
+
+      assert [%{body: first}, %{body: second}] = Mock.calls(mock)
+      assert first == %{"domain" => "blocked.example", "note" => "Spam trap domain"}
+      assert second == %{"emails" => ["ada@example.com"], "note" => "Reported"}
     end
 
     test "the list takes `kind`, and only the published values" do
@@ -284,6 +311,39 @@ defmodule BillionSend.ApiChangesTest do
         assert event["data"]["domain"] ==
                  if(unquote(scope) == "domain", do: %{"id" => "d1", "name" => "acme.dev"})
       end
+    end
+  end
+
+  describe "a domain's broadcast limit" do
+    test "get answers the broadcast limit the domain is under" do
+      {client, mock} = client()
+      {_, _, schema} = Contract.Operation.success(Contract.operation("GET", "/domains/{id}"))
+
+      limits = %{
+        "mode" => "warming",
+        "warmup_day" => 3,
+        "warmup_ends_on" => "2026-12-23",
+        "window_started_at" => "2026-11-26T08:00:00Z",
+        "cap" => 400,
+        "used" => 150,
+        "g" => 1,
+        "g_reasons" => ["provider_backoff"],
+        "t" => 120,
+        "b" => 80,
+        "parked" => 25,
+        "next_window_at" => "2026-11-27T08:00:00Z",
+        "hard_indicators" => %{
+          "delivery" => "ok",
+          "content_review" => "clear",
+          "providers_in_backoff" => 1
+        }
+      }
+
+      domain = schema |> Contract.example() |> Map.put("sending_limits", limits)
+      Mock.respond(mock, "GET", "/domains/{id}", 200, json: domain)
+
+      assert {:ok, %{"sending_limits" => ^limits}} =
+               BillionSend.Domains.get(client, "8c3f3f5a-5e77-4c6a-9c79-2b4d5e6f7a81")
     end
   end
 end

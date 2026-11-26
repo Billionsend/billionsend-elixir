@@ -492,6 +492,12 @@
             "minItems": 1,
             "type": "array"
           },
+          "note": {
+            "description": "BillionSend extension: why the entry is blocked, up to 500 characters; shown as its detail in the dashboard and returned as `note`. Stored on the rows this request creates; an entry that already exists keeps its own",
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
           "origin": {
             "description": "Origin recorded on rows this request creates (default manual): bounce, complaint or manual; an address already suppressed keeps its origin",
             "enum": [
@@ -853,7 +859,7 @@
                   "type": "boolean"
                 },
                 "unsubscribed_domains": {
-                  "description": "BillionSend extension: the domains this contact unsubscribed from through a link in their email. Marketing sends from those domains skip the contact; other domains still reach them. The team-wide opt-out is `unsubscribed`, not an entry here. Remove an entry with DELETE /unsubscribes/{id}.",
+                  "description": "BillionSend extension: the domains this contact unsubscribed from through a link in their email. Mail from those domains skips the contact, transactional mail too unless the domain turned on `send_transactional_to_unsubscribed`; other domains still reach them. The team-wide switch is `unsubscribed`, not an entry here. An opt-out is permanent: only the recipient can undo it, from the hosted unsubscribe page.",
                   "items": {
                     "properties": {
                       "domain_id": {
@@ -2566,6 +2572,12 @@
             "format": "email",
             "type": "string"
           },
+          "note": {
+            "description": "BillionSend extension: why the entry is blocked, up to 500 characters; shown as its detail in the dashboard and returned as `note`. Stored on the rows this request creates; an entry that already exists keeps its own",
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
           "origin": {
             "description": "Origin recorded on rows this request creates (default manual): bounce, complaint or manual; an address already suppressed keeps its origin",
             "enum": [
@@ -3982,7 +3994,7 @@
             "type": "boolean"
           },
           "unsubscribed_domains": {
-            "description": "BillionSend extension: the domains this contact unsubscribed from through a link in their email. Marketing sends from those domains skip the contact; other domains still reach them. The team-wide opt-out is `unsubscribed`, not an entry here. Remove an entry with DELETE /unsubscribes/{id}.",
+            "description": "BillionSend extension: the domains this contact unsubscribed from through a link in their email. Mail from those domains skips the contact, transactional mail too unless the domain turned on `send_transactional_to_unsubscribed`; other domains still reach them. The team-wide switch is `unsubscribed`, not an entry here. An opt-out is permanent: only the recipient can undo it, from the hosted unsubscribe page.",
             "items": {
               "properties": {
                 "domain_id": {
@@ -4166,6 +4178,139 @@
           "send_transactional_to_unsubscribed": {
             "description": "BillionSend extension: a recipient who unsubscribed from this domain, or from the whole team, gets no mail from it at all, transactional mail included. Turn this on to send this domain's transactional mail (no topic, not a broadcast) to them anyway. Default false. Broadcasts and topic mail always respect the unsubscribe.",
             "type": "boolean"
+          },
+          "sending_limits": {
+            "description": "BillionSend extension, on GET /domains/{id} only: the broadcast limit this domain's registrable name is under (only broadcasts are limited; API, SMTP and automation mail never are). Read-only.",
+            "properties": {
+              "b": {
+                "description": "Broadcast deliveries in the previous window",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "cap": {
+                "description": "Broadcast recipients the window admits: max(200, g x (t + b)); of the window that would open now while none runs; null when unlimited",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "g": {
+                "description": "The growth multiplier: 2 while every signal is normal, 1 while a warning holds it",
+                "type": "integer"
+              },
+              "g_reasons": {
+                "description": "The warnings holding g at 1",
+                "items": {
+                  "enum": [
+                    "delivery_warning",
+                    "provider_backoff",
+                    "content_suspicious"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "hard_indicators": {
+                "properties": {
+                  "content_review": {
+                    "enum": [
+                      "clear",
+                      "held"
+                    ],
+                    "type": "string"
+                  },
+                  "delivery": {
+                    "enum": [
+                      "ok",
+                      "warning",
+                      "paused"
+                    ],
+                    "type": "string"
+                  },
+                  "providers_in_backoff": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "delivery",
+                  "content_review",
+                  "providers_in_backoff"
+                ],
+                "type": "object"
+              },
+              "mode": {
+                "description": "warming: inside the 30-day broadcast warm-up (it starts at the domain's first successful delivery here); limited: past it, but a warning holds g at 1; unlimited: broadcasts are not limited; exempt or trusted: the team is outside the limit",
+                "enum": [
+                  "warming",
+                  "limited",
+                  "unlimited",
+                  "exempt",
+                  "trusted"
+                ],
+                "type": "string"
+              },
+              "next_window_at": {
+                "description": "When the next window can open; null with nothing waiting",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "parked": {
+                "description": "Broadcast recipients waiting for the next window",
+                "type": "integer"
+              },
+              "t": {
+                "description": "Transactional deliveries in the 24 hours before the window opened",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "used": {
+                "description": "What the running window has used; null when unlimited",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "warmup_day": {
+                "description": "The day of the 30-day warm-up (1 on the first day); 0 before the first delivery",
+                "type": "integer"
+              },
+              "warmup_ends_on": {
+                "description": "When the warm-up ends; null before the first delivery",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "window_started_at": {
+                "description": "When the running 24-hour window opened; null while none runs (the next broadcast recipient opens one)",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "mode",
+              "warmup_day",
+              "warmup_ends_on",
+              "window_started_at",
+              "cap",
+              "used",
+              "g",
+              "g_reasons",
+              "t",
+              "b",
+              "parked",
+              "next_window_at",
+              "hard_indicators"
+            ],
+            "type": "object"
           },
           "sending_mode": {
             "description": "BillionSend extension, on the shared row only: what its inboxes' addresses may send. open starts conversations, reply_only replies inside their threads, receive_only sends nothing. Holds on names still apply per send: an address whose username or from_name imitates a brand, or one on an older label that does, replies only, even when the mode is open.",
@@ -5191,6 +5336,13 @@
             ],
             "type": "string"
           },
+          "note": {
+            "description": "BillionSend extension: why the entry was added; null on an entry SES wrote",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "object": {
             "enum": [
               "suppression"
@@ -5226,6 +5378,7 @@
           "removable",
           "origin",
           "source_id",
+          "note",
           "created_at",
           "object"
         ],
@@ -7606,7 +7759,7 @@
                   "type": "boolean"
                 },
                 "unsubscribed_domains": {
-                  "description": "BillionSend extension: the domains this contact unsubscribed from through a link in their email. Marketing sends from those domains skip the contact; other domains still reach them. The team-wide opt-out is `unsubscribed`, not an entry here. Remove an entry with DELETE /unsubscribes/{id}.",
+                  "description": "BillionSend extension: the domains this contact unsubscribed from through a link in their email. Mail from those domains skips the contact, transactional mail too unless the domain turned on `send_transactional_to_unsubscribed`; other domains still reach them. The team-wide switch is `unsubscribed`, not an entry here. An opt-out is permanent: only the recipient can undo it, from the hosted unsubscribe page.",
                   "items": {
                     "properties": {
                       "domain_id": {
@@ -9305,6 +9458,13 @@
                   ],
                   "type": "string"
                 },
+                "note": {
+                  "description": "BillionSend extension: why the entry was added; null on an entry SES wrote",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "origin": {
                   "enum": [
                     "bounce",
@@ -9334,6 +9494,7 @@
                 "removable",
                 "origin",
                 "source_id",
+                "note",
                 "created_at"
               ],
               "type": "object"

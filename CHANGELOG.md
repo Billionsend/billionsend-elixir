@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1 (2026-11-26)
+
+Snapshot synced to the published API (186 operations, none added or removed).
+
+- Suppressions carry a `note`, why the entry is blocked: `BillionSend.Suppressions.create/3` and `BillionSend.Suppressions.Batch.add/3` take one (1 to 500 characters, stored on the rows the request creates; an entry that already exists keeps its own), and every entry answers it (`nil` on an entry SES wrote).
+- `BillionSend.Domains.get/3` answers `sending_limits`, the broadcast limit the domain's registrable name is under (read-only, only on this call): `mode` (`warming`, `limited`, `unlimited`, `exempt` or `trusted`), `warmup_day`, `warmup_ends_on`, the running window (`window_started_at`, `cap`, `used`), the growth multiplier `g` with the warnings holding it (`g_reasons`), the deliveries it grows from (`t`, `b`), the recipients waiting for the next window (`parked`, `next_window_at`) and `hard_indicators` (`delivery`, `content_review`, `providers_in_backoff`). Only broadcasts are limited; API, SMTP and automation mail never are.
+- A recipient's opt-out from a domain is permanent and covers transactional mail too unless the domain turned on `send_transactional_to_unsubscribed`; a broadcast body without the unsubscribe placeholder gets a default unsubscribe link when it is sent (server-side, as the published descriptions now say).
+
 ## 0.3.0 (2026-11-20)
 
 Snapshot synced to the published API (`https://billionsend.com/docs/api.openapi.json`, now 186 operations).
