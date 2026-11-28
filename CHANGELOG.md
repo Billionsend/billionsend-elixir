@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 (2026-11-28)
+
+Snapshot synced to the published API (`https://billionsend.com/docs/api.openapi.json`, now 193 operations, up from 186).
+
+- New: `BillionSend.BroadcastGroups` (`create`, `list`, `list_all`, `get`, `update`, `remove`, `send`, `cancel`): one send from several sending domains. A group names two to twenty of your verified domains and holds one broadcast per domain, all with the same content, from the same name and local part, to the same audience; each contact is mailed from one of the domains and keeps it for later sends.
+- Changed: `BillionSend.Automations.stop/4` (and `stop!/4`) takes the request body the document now declares, `cancel_runs: true` to cancel the runs already going as well as stopping the automation; the body may be left out, and the functions keep their old calls (`stop(client, id)`, `stop(client, id, extra_headers: ...)`).
+- The descriptions follow the published ones, which also changed for broadcasts, domains, emails, topics and a contact's topics.
+- README: the snapshot is the published document again, so the note about fields it lacked is gone.
+
 ## 0.3.1 (2026-11-26)
 
 Snapshot synced to the published API (186 operations, none added or removed).

@@ -1160,6 +1160,18 @@
         ],
         "type": "object"
       },
+      "BroadcastGroupIdResponse": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
       "BroadcastIdResponse": {
         "properties": {
           "id": {
@@ -1195,6 +1207,30 @@
           "object",
           "id",
           "status"
+        ],
+        "type": "object"
+      },
+      "CancelBroadcastGroupResponse": {
+        "properties": {
+          "canceled_remaining": {
+            "description": "Emails stopped before going out; the ones already sent are not recalled",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "object": {
+            "enum": [
+              "broadcast_group"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "object",
+          "id",
+          "canceled_remaining"
         ],
         "type": "object"
       },
@@ -1249,7 +1285,8 @@
           },
           "custom_return_path": {
             "default": "bounce",
-            "description": "The MAIL FROM (return-path) subdomain, fixed when the domain is added: it cannot be changed later (delete and re-add the domain). Defaults to `bounce`, not `send`, so a domain that still sends through another provider whose return path is `send` keeps its bounces working while both send.",
+            "description": "The MAIL FROM (return-path) label, fixed when the domain is added: it cannot be changed later (delete and re-add the domain). The MAIL FROM host is `<label>-<region>.<domain>` (e.g. `bounce-us-east-2`), and records lists its MX and TXT. Defaults to `bounce`, not `send`, so a domain that still sends through another provider whose return path is `send` keeps its bounces working while both send.",
+            "maxLength": 48,
             "type": "string"
           },
           "name": {
@@ -1260,12 +1297,11 @@
             "type": "boolean"
           },
           "region": {
-            "description": "SES region of the identity, one of the regions this deployment serves (the values listed here). Without one, the team's default sending region from Settings is used, else the first listed. Any other region is rejected with 422. A domain has one region, fixed when it is added.",
+            "description": "The SES region the domain sends from, one of the regions this deployment serves (the values listed here); without one, the first listed. Any other region is rejected with 422. Echoed back as the domain's region.",
             "enum": [
-              "us-east-1",
-              "eu-west-1",
-              "sa-east-1",
-              "ap-northeast-1"
+              "us-east-2",
+              "ap-southeast-1",
+              "eu-west-3"
             ],
             "type": "string"
           },
@@ -1670,8 +1706,148 @@
         ],
         "type": "object"
       },
+      "CreateBroadcastGroupRequest": {
+        "properties": {
+          "domain_ids": {
+            "description": "The sending domains, 2 to 20 different ones of your verified domains; the group gets one broadcast per domain",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 2,
+            "type": "array"
+          },
+          "dormant_check": {
+            "description": "As on a broadcast: the \"still want these?\" email for long-unengaged contacts",
+            "type": "boolean"
+          },
+          "from_local_part": {
+            "description": "The part before the @ of every From; each domain of the group completes it",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "from_name": {
+            "description": "Display name of every From, as in \"Name <local@domain>\"",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "html": {
+            "description": "HTML body; at least one of html/text is required",
+            "type": "string"
+          },
+          "include_dormant": {
+            "description": "As on a broadcast: true also sends to contacts marked dormant",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "Internal name shown in the dashboard",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "preview_text": {
+            "type": "string"
+          },
+          "reassign_domain_ids": {
+            "description": "Domains you left out of this send whose contacts are given one of domain_ids instead; a contact who unsubscribed from its old domain is left out. Without it, contacts on a domain outside the group are not mailed",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "minItems": 1,
+                "type": "array"
+              }
+            ]
+          },
+          "scheduled_at": {
+            "description": "Deliver later (requires send: true): ISO 8601 with offset or relative like \"in 1 hour\"",
+            "type": "string"
+          },
+          "segment_id": {
+            "description": "Segment to send to, one not bound to a domain; omitted means every contact of the team",
+            "format": "uuid",
+            "type": "string"
+          },
+          "send": {
+            "description": "true sends (or schedules) the group at once",
+            "type": "boolean"
+          },
+          "subject": {
+            "maxLength": 998,
+            "minLength": 1,
+            "type": "string"
+          },
+          "text": {
+            "description": "Plain-text body",
+            "type": "string"
+          },
+          "topic_id": {
+            "description": "Topic id, one not bound to a domain; only contacts subscribed to it receive the send",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "domain_ids",
+          "from_local_part",
+          "subject"
+        ],
+        "type": "object"
+      },
+      "CreateBroadcastGroupResponse": {
+        "properties": {
+          "broadcast_ids": {
+            "description": "The group's broadcasts, in domain_ids' order",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "finishes_at": {
+            "description": "With send: true, when the last email is expected to go out (ISO 8601); null when unknown",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "broadcast_ids"
+        ],
+        "type": "object"
+      },
       "CreateBroadcastRequest": {
         "properties": {
+          "audience_id": {
+            "description": "An older name for segment_id, accepted as its alias; sending both with different values answers 422",
+            "format": "uuid",
+            "type": "string"
+          },
           "dormant_check": {
             "description": "BillionSend extension: when true (the default), a contact who got 8 or more of your broadcasts and automation emails with no tracked open or click for 120 days (or ever) gets a short \"still want these?\" email with a confirm link instead of this broadcast, and is left out of later broadcasts if it does not confirm or engage within 14 days. Applies only when the sending domain has open or click tracking on. false sends the content to everyone",
             "type": "boolean"
@@ -1934,7 +2110,8 @@
           },
           "custom_return_path": {
             "default": "bounce",
-            "description": "The MAIL FROM (return-path) subdomain, fixed when the domain is added: it cannot be changed later (delete and re-add the domain). Defaults to `bounce`, not `send`, so a domain that still sends through another provider whose return path is `send` keeps its bounces working while both send.",
+            "description": "The MAIL FROM (return-path) label, fixed when the domain is added: it cannot be changed later (delete and re-add the domain). The MAIL FROM host is `<label>-<region>.<domain>` (e.g. `bounce-us-east-2`), and records lists its MX and TXT. Defaults to `bounce`, not `send`, so a domain that still sends through another provider whose return path is `send` keeps its bounces working while both send.",
+            "maxLength": 48,
             "type": "string"
           },
           "name": {
@@ -1945,14 +2122,16 @@
             "type": "boolean"
           },
           "region": {
-            "description": "SES region of the identity, one of the regions this deployment serves (the values listed here). Without one, the team's default sending region from Settings is used, else the first listed. Any other region is rejected with 422. A domain has one region, fixed when it is added.",
+            "description": "The SES region the domain sends from, one of the regions this deployment serves (the values listed here); without one, the first listed. Any other region is rejected with 422. Echoed back as the domain's region.",
             "enum": [
-              "us-east-1",
-              "eu-west-1",
-              "sa-east-1",
-              "ap-northeast-1"
+              "us-east-2",
+              "ap-southeast-1",
+              "eu-west-3"
             ],
             "type": "string"
+          },
+          "tls": {
+            "description": "Not supported: sending it answers 422."
           },
           "tracking_subdomain": {
             "description": "DNS label of the domain's own tracking host, e.g. \"links\" for links.<domain>. Optional: without one, tracked links use the shared tracking host. Setting it adds a Tracking CNAME to records[] (point it at the given value, DNS only); its certificate is issued automatically once it resolves, the Tracking record then reads verified, and links go through it from then on. A subdomain that does not activate within 72 hours reads failed; send the same tracking_subdomain again to retry.",
@@ -2044,7 +2223,7 @@
                   "type": "number"
                 },
                 "record": {
-                  "description": "Which record this is: DKIM, SPF (the MAIL FROM MX and TXT rows), DMARC, Tracking (the tracking subdomain's CNAME, present once a tracking subdomain is set), Unsubscribe (the unsubscribe subdomain's CNAME, present once an unsubscribe subdomain is set to a label other than the tracking one) or Receiving (the MX inbound mail needs, present while receiving is enabled; it reads verified only when it is among the domain's lowest-numbered MX records). Only the DKIM and SPF rows gate sending.",
+                  "description": "Which record this is: DKIM, SPF (the MAIL FROM MX and TXT rows), DMARC, Tracking (the tracking subdomain's CNAME, present once a tracking subdomain is set), Unsubscribe (the unsubscribe subdomain's CNAME, present once an unsubscribe subdomain is set to a label other than the tracking one) or Receiving (the MX inbound mail needs, present while receiving is enabled; it reads verified only when it is among the domain's lowest-numbered MX records). Only the DKIM and SPF rows gate sending: the domain verifies once DKIM and the MAIL FROM pair verify. Add every record listed: mail whose MAIL FROM records are missing goes out with the provider's own return path, and DMARC still aligns on DKIM.",
                   "type": "string"
                 },
                 "status": {
@@ -2074,6 +2253,7 @@
             "type": "array"
           },
           "region": {
+            "description": "The region the domain sends from, chosen when it was added.",
             "type": "string"
           },
           "send_transactional_to_unsubscribed": {
@@ -3703,8 +3883,274 @@
         ],
         "type": "object"
       },
+      "GetBroadcastGroupResponse": {
+        "properties": {
+          "broadcasts": {
+            "items": {
+              "properties": {
+                "domain_id": {
+                  "format": "uuid",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "failure_reason": {
+                  "enum": [
+                    "domain_missing",
+                    "sender_domain_mismatch",
+                    "topic_other_domain",
+                    "segment_other_domain",
+                    "domain_unverified",
+                    "retries_exhausted",
+                    null
+                  ],
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "finishes_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "from": {
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The broadcast's id, readable at GET /broadcasts/{id}",
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "sent_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sent_count": {
+                  "type": "integer"
+                },
+                "status": {
+                  "description": "queued while any of its broadcasts is going out; once all ended, sent if any sent, else failed if any failed, else canceled",
+                  "enum": [
+                    "draft",
+                    "queued",
+                    "sent",
+                    "canceled",
+                    "failed"
+                  ],
+                  "type": "string"
+                },
+                "total_count": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "domain_id",
+                "from",
+                "status",
+                "failure_reason",
+                "sent_count",
+                "total_count",
+                "sent_at",
+                "finishes_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "domain_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "domain_weights": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Each domain id's weight in the split of the unassigned contacts, fixed when the group is sent; null on a draft",
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "dormant_check": {
+            "type": "boolean"
+          },
+          "finishes_at": {
+            "description": "Estimated instant the last email goes out, while the group is going out; else null",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from_local_part": {
+            "type": "string"
+          },
+          "from_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "include_dormant": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "object": {
+            "enum": [
+              "broadcast_group"
+            ],
+            "type": "string"
+          },
+          "other_brand_count": {
+            "description": "Contacts left out because they belong to a domain outside the group; null until the send counted them",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "preview_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reassign_domain_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reply_to": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "scheduled_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "segment_id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sent_count": {
+            "description": "Emails handed off so far, over all its broadcasts",
+            "type": "integer"
+          },
+          "status": {
+            "description": "queued while any of its broadcasts is going out; once all ended, sent if any sent, else failed if any failed, else canceled",
+            "enum": [
+              "draft",
+              "queued",
+              "sent",
+              "canceled",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "topic_id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total_count": {
+            "description": "Who the send reaches at most: each broadcast's written emails, else its counted audience; null before a count",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "domain_ids",
+          "reassign_domain_ids",
+          "subject",
+          "segment_id",
+          "topic_id",
+          "domain_weights",
+          "other_brand_count",
+          "created_at",
+          "updated_at",
+          "scheduled_at",
+          "sent_count",
+          "total_count",
+          "finishes_at",
+          "broadcasts",
+          "object",
+          "from_name",
+          "from_local_part",
+          "reply_to",
+          "preview_text",
+          "html",
+          "text",
+          "dormant_check",
+          "include_dormant"
+        ],
+        "type": "object"
+      },
       "GetBroadcastResponse": {
         "properties": {
+          "audience_id": {
+            "description": "The same value as segment_id, under its older name",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "created_at": {
             "type": "string"
           },
@@ -3752,6 +4198,14 @@
           },
           "from": {
             "type": "string"
+          },
+          "group_id": {
+            "description": "BillionSend extension: the broadcast group this broadcast is one sending domain's part of; it is changed, sent and deleted only through the group. null for a broadcast of no group",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "html": {
             "type": [
@@ -3814,7 +4268,7 @@
             ]
           },
           "sent_count": {
-            "description": "Emails handed off so far; null before the send starts and once its emails have left the retention window",
+            "description": "Emails handed off so far; null before the send starts",
             "type": [
               "integer",
               "null"
@@ -3845,6 +4299,7 @@
           "id",
           "name",
           "segment_id",
+          "audience_id",
           "status",
           "created_at",
           "scheduled_at",
@@ -3854,6 +4309,7 @@
           "sent_count",
           "finishes_at",
           "object",
+          "group_id",
           "from",
           "subject",
           "reply_to",
@@ -4143,7 +4599,7 @@
                   "type": "number"
                 },
                 "record": {
-                  "description": "Which record this is: DKIM, SPF (the MAIL FROM MX and TXT rows), DMARC, Tracking (the tracking subdomain's CNAME, present once a tracking subdomain is set), Unsubscribe (the unsubscribe subdomain's CNAME, present once an unsubscribe subdomain is set to a label other than the tracking one) or Receiving (the MX inbound mail needs, present while receiving is enabled; it reads verified only when it is among the domain's lowest-numbered MX records). Only the DKIM and SPF rows gate sending.",
+                  "description": "Which record this is: DKIM, SPF (the MAIL FROM MX and TXT rows), DMARC, Tracking (the tracking subdomain's CNAME, present once a tracking subdomain is set), Unsubscribe (the unsubscribe subdomain's CNAME, present once an unsubscribe subdomain is set to a label other than the tracking one) or Receiving (the MX inbound mail needs, present while receiving is enabled; it reads verified only when it is among the domain's lowest-numbered MX records). Only the DKIM and SPF rows gate sending: the domain verifies once DKIM and the MAIL FROM pair verify. Add every record listed: mail whose MAIL FROM records are missing goes out with the provider's own return path, and DMARC still aligns on DKIM.",
                   "type": "string"
                 },
                 "status": {
@@ -4173,6 +4629,7 @@
             "type": "array"
           },
           "region": {
+            "description": "The region the domain sends from, chosen when it was added.",
             "type": "string"
           },
           "send_transactional_to_unsubscribed": {
@@ -4590,6 +5047,25 @@
           "subject": {
             "type": "string"
           },
+          "tags": {
+            "description": "The tags set when the email was sent; absent when it has none",
+            "items": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "text": {
             "type": [
               "string",
@@ -4601,6 +5077,13 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "topic_id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -4614,10 +5097,11 @@
           "created_at",
           "scheduled_at",
           "last_event",
+          "message_id",
+          "topic_id",
           "object",
           "html",
           "text",
-          "message_id",
           "score"
         ],
         "type": "object"
@@ -7281,6 +7765,229 @@
         ],
         "type": "object"
       },
+      "ListBroadcastGroupsResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "properties": {
+                "broadcasts": {
+                  "items": {
+                    "properties": {
+                      "domain_id": {
+                        "format": "uuid",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "failure_reason": {
+                        "enum": [
+                          "domain_missing",
+                          "sender_domain_mismatch",
+                          "topic_other_domain",
+                          "segment_other_domain",
+                          "domain_unverified",
+                          "retries_exhausted",
+                          null
+                        ],
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "finishes_at": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "from": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "description": "The broadcast's id, readable at GET /broadcasts/{id}",
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "sent_at": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "sent_count": {
+                        "type": "integer"
+                      },
+                      "status": {
+                        "description": "queued while any of its broadcasts is going out; once all ended, sent if any sent, else failed if any failed, else canceled",
+                        "enum": [
+                          "draft",
+                          "queued",
+                          "sent",
+                          "canceled",
+                          "failed"
+                        ],
+                        "type": "string"
+                      },
+                      "total_count": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "domain_id",
+                      "from",
+                      "status",
+                      "failure_reason",
+                      "sent_count",
+                      "total_count",
+                      "sent_at",
+                      "finishes_at"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "domain_ids": {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "domain_weights": {
+                  "additionalProperties": {
+                    "type": "number"
+                  },
+                  "description": "Each domain id's weight in the split of the unassigned contacts, fixed when the group is sent; null on a draft",
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "finishes_at": {
+                  "description": "Estimated instant the last email goes out, while the group is going out; else null",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "other_brand_count": {
+                  "description": "Contacts left out because they belong to a domain outside the group; null until the send counted them",
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "reassign_domain_ids": {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "scheduled_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "segment_id": {
+                  "format": "uuid",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sent_count": {
+                  "description": "Emails handed off so far, over all its broadcasts",
+                  "type": "integer"
+                },
+                "status": {
+                  "description": "queued while any of its broadcasts is going out; once all ended, sent if any sent, else failed if any failed, else canceled",
+                  "enum": [
+                    "draft",
+                    "queued",
+                    "sent",
+                    "canceled",
+                    "failed"
+                  ],
+                  "type": "string"
+                },
+                "subject": {
+                  "type": "string"
+                },
+                "topic_id": {
+                  "format": "uuid",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "total_count": {
+                  "description": "Who the send reaches at most: each broadcast's written emails, else its counted audience; null before a count",
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "updated_at": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "status",
+                "domain_ids",
+                "reassign_domain_ids",
+                "subject",
+                "segment_id",
+                "topic_id",
+                "domain_weights",
+                "other_brand_count",
+                "created_at",
+                "updated_at",
+                "scheduled_at",
+                "sent_count",
+                "total_count",
+                "finishes_at",
+                "broadcasts"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "object": {
+            "enum": [
+              "list"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "type": "object"
+      },
       "ListBroadcastRecipientsResponse": {
         "properties": {
           "data": {
@@ -7365,6 +8072,14 @@
           "data": {
             "items": {
               "properties": {
+                "audience_id": {
+                  "description": "The same value as segment_id, under its older name",
+                  "format": "uuid",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "created_at": {
                   "type": "string"
                 },
@@ -7428,7 +8143,7 @@
                   ]
                 },
                 "sent_count": {
-                  "description": "Emails handed off so far; null before the send starts and once its emails have left the retention window",
+                  "description": "Emails handed off so far; null before the send starts",
                   "type": [
                     "integer",
                     "null"
@@ -7443,6 +8158,7 @@
                 "id",
                 "name",
                 "segment_id",
+                "audience_id",
                 "status",
                 "created_at",
                 "scheduled_at",
@@ -7614,9 +8330,6 @@
             "type": "array"
           },
           "has_more": {
-            "enum": [
-              false
-            ],
             "type": "boolean"
           },
           "object": {
@@ -7886,6 +8599,7 @@
                   "type": "boolean"
                 },
                 "region": {
+                  "description": "The region the domain sends from, chosen when it was added.",
                   "type": "string"
                 },
                 "send_transactional_to_unsubscribed": {
@@ -8151,6 +8865,9 @@
                 "last_event": {
                   "type": "string"
                 },
+                "message_id": {
+                  "type": "string"
+                },
                 "reply_to": {
                   "items": {
                     "type": "string"
@@ -8174,6 +8891,13 @@
                     "type": "string"
                   },
                   "type": "array"
+                },
+                "topic_id": {
+                  "format": "uuid",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -8186,7 +8910,9 @@
                 "subject",
                 "created_at",
                 "scheduled_at",
-                "last_event"
+                "last_event",
+                "message_id",
+                "topic_id"
               ],
               "type": "object"
             },
@@ -9636,9 +10362,6 @@
             "type": "array"
           },
           "has_more": {
-            "enum": [
-              false
-            ],
             "type": "boolean"
           },
           "object": {
@@ -10423,6 +11146,32 @@
         ],
         "type": "object"
       },
+      "RemoveBroadcastGroupResponse": {
+        "properties": {
+          "deleted": {
+            "enum": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "object": {
+            "enum": [
+              "broadcast_group"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "object",
+          "id",
+          "deleted"
+        ],
+        "type": "object"
+      },
       "RemoveBroadcastResponse": {
         "properties": {
           "deleted": {
@@ -11177,6 +11926,34 @@
           "domain_id",
           "filter",
           "created_at"
+        ],
+        "type": "object"
+      },
+      "SendBroadcastGroupResponse": {
+        "properties": {
+          "broadcast_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "finishes_at": {
+            "description": "When the last email is expected to go out (ISO 8601); null when unknown",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "broadcast_ids",
+          "finishes_at"
         ],
         "type": "object"
       },
@@ -11978,6 +12755,15 @@
         ],
         "type": "object"
       },
+      "StopAutomationRequest": {
+        "properties": {
+          "cancel_runs": {
+            "description": "BillionSend extension: also cancel the runs already going, as cancelling a run does; their mail already accepted stays accepted. Default false: they finish",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "StopAutomationResponse": {
         "properties": {
           "id": {
@@ -12388,8 +13174,109 @@
         },
         "type": "object"
       },
+      "UpdateBroadcastGroupRequest": {
+        "properties": {
+          "domain_ids": {
+            "description": "The sending domains, 2 to 20 different ones of your verified domains; the group gets one broadcast per domain",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 2,
+            "type": "array"
+          },
+          "dormant_check": {
+            "description": "As on a broadcast: the \"still want these?\" email for long-unengaged contacts",
+            "type": "boolean"
+          },
+          "from_local_part": {
+            "description": "The part before the @ of every From; each domain of the group completes it",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "from_name": {
+            "description": "Display name of every From, as in \"Name <local@domain>\"",
+            "maxLength": 200,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html": {
+            "type": "string"
+          },
+          "include_dormant": {
+            "description": "As on a broadcast: true also sends to contacts marked dormant",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "preview_text": {
+            "type": "string"
+          },
+          "reassign_domain_ids": {
+            "description": "Domains you left out of this send whose contacts are given one of domain_ids instead; a contact who unsubscribed from its old domain is left out. Without it, contacts on a domain outside the group are not mailed",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "minItems": 1,
+                "type": "array"
+              }
+            ]
+          },
+          "segment_id": {
+            "description": "Segment to send to, one not bound to a domain; omitted means every contact of the team",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subject": {
+            "maxLength": 998,
+            "minLength": 1,
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "topic_id": {
+            "description": "Topic id, one not bound to a domain; only contacts subscribed to it receive the send",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "UpdateBroadcastRequest": {
         "properties": {
+          "audience_id": {
+            "description": "An older name for segment_id, accepted as its alias; sending both with different values answers 422",
+            "format": "uuid",
+            "type": "string"
+          },
           "dormant_check": {
             "description": "BillionSend extension: when true (the default), a contact who got 8 or more of your broadcasts and automation emails with no tracked open or click for 120 days (or ever) gets a short \"still want these?\" email with a confirm link instead of this broadcast, and is left out of later broadcasts if it does not confirm or engage within 14 days. Applies only when the sending domain has open or click tracking on. false sends the content to everyone",
             "type": "boolean"
@@ -12572,7 +13459,9 @@
             "description": "BillionSend extension: a recipient who unsubscribed from this domain, or from the whole team, gets no mail from it at all, transactional mail included. Turn this on to send this domain's transactional mail (no topic, not a broadcast) to them anyway. Default false. Broadcasts and topic mail always respect the unsubscribe.",
             "type": "boolean"
           },
-          "tls": {},
+          "tls": {
+            "description": "Not supported: sending it answers 422."
+          },
           "tracking_subdomain": {
             "description": "DNS label of the domain's own tracking host, e.g. \"links\" for links.<domain>. Optional: without one, tracked links use the shared tracking host. Setting it adds a Tracking CNAME to records[] (point it at the given value, DNS only); its certificate is issued automatically once it resolves, the Tracking record then reads verified, and links go through it from then on. A subdomain that does not activate within 72 hours reads failed; send the same tracking_subdomain again to retry. Empty string or null clears it.",
             "type": [
@@ -16700,7 +17589,7 @@
     },
     "/automations/{id}/stop": {
       "post": {
-        "description": "Sets the automation to disabled: no new runs start; runs already going finish. Stopping a stopped automation answers the same.",
+        "description": "Sets the automation to disabled: no new runs start; runs already going finish, unless cancel_runs cancels them. Stopping a stopped automation answers the same, and with cancel_runs cancels what is still going, so a call cut short can be repeated.",
         "operationId": "automations.stop",
         "parameters": [
           {
@@ -16715,6 +17604,16 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StopAutomationRequest"
+              }
+            }
+          },
+          "required": false
+        },
         "responses": {
           "200": {
             "content": {
@@ -16725,6 +17624,21 @@
               }
             },
             "description": "Automation stopped",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed JSON body",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -16770,6 +17684,21 @@
               }
             },
             "description": "Not found",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -17222,6 +18151,905 @@
         ]
       }
     },
+    "/broadcast-groups": {
+      "get": {
+        "description": "Newest first, with cursor pagination: `after` takes the last id of a page and pages toward older items, `before` takes the first id and pages back toward newer ones.",
+        "operationId": "broadcastGroups.list",
+        "parameters": [
+          {
+            "description": "Page size, 1-100 (default 20)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "description": "Page size, 1-100 (default 20)",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Cursor: id of the last item of the current page; returns the next page. Must be an id this list returned; there is no sentinel value.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "description": "Cursor: id of the last item of the current page; returns the next page. Must be an id this list returned; there is no sentinel value.",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Cursor: id of the first item of the current page; returns the previous page; same rule as after.",
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "description": "Cursor: id of the first item of the current page; returns the previous page; same rule as after.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBroadcastGroupsResponse"
+                }
+              }
+            },
+            "description": "Broadcast groups",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown or revoked API key",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Restricted API key: refused to a sending-only key, a key held to one domain, a key held to one inbox (restricted_api_key)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Over the rate limit (rate_limit_exceeded, with Retry-After)",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried; sent with rate_limit_exceeded",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "summary": "List broadcast groups",
+        "tags": [
+          "Broadcast groups"
+        ]
+      },
+      "post": {
+        "description": "BillionSend extension: one send from several sending domains. The group holds a broadcast per domain, all with the same content, from the same name and local part, to the same audience; each contact is mailed from one of the domains and keeps it for later sends.",
+        "operationId": "broadcastGroups.create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBroadcastGroupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateBroadcastGroupResponse"
+                }
+              }
+            },
+            "description": "Group created (and scheduled when send: true)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Group state conflict",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown or revoked API key",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Restricted API key, or sending paused; refused to a sending-only key, a key held to one domain, a key held to one inbox (restricted_api_key)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The group changed while it was being sent",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Over the rate limit (rate_limit_exceeded, with Retry-After)",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried; sent with rate_limit_exceeded",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "summary": "Create a broadcast group",
+        "tags": [
+          "Broadcast groups"
+        ]
+      }
+    },
+    "/broadcast-groups/{id}": {
+      "delete": {
+        "description": "Only while all its broadcasts are drafts; they are deleted with it.",
+        "operationId": "broadcastGroups.remove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoveBroadcastGroupResponse"
+                }
+              }
+            },
+            "description": "Group deleted",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not a draft",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown or revoked API key",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Restricted API key: refused to a sending-only key, a key held to one domain, a key held to one inbox (restricted_api_key)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Over the rate limit (rate_limit_exceeded, with Retry-After)",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried; sent with rate_limit_exceeded",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "summary": "Delete a broadcast group",
+        "tags": [
+          "Broadcast groups"
+        ]
+      },
+      "get": {
+        "operationId": "broadcastGroups.get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetBroadcastGroupResponse"
+                }
+              }
+            },
+            "description": "Broadcast group",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown or revoked API key",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Restricted API key: refused to a sending-only key, a key held to one domain, a key held to one inbox (restricted_api_key)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Over the rate limit (rate_limit_exceeded, with Retry-After)",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried; sent with rate_limit_exceeded",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "summary": "Retrieve a broadcast group",
+        "tags": [
+          "Broadcast groups"
+        ]
+      },
+      "patch": {
+        "description": "Only while all its broadcasts are drafts. Its broadcasts are rewritten: one kept keeps its id, a new domain gets one, a removed domain's is deleted.",
+        "operationId": "broadcastGroups.update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBroadcastGroupRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BroadcastGroupIdResponse"
+                }
+              }
+            },
+            "description": "Group updated",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not a draft",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown or revoked API key",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Restricted API key: refused to a sending-only key, a key held to one domain, a key held to one inbox (restricted_api_key)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Over the rate limit (rate_limit_exceeded, with Retry-After)",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried; sent with rate_limit_exceeded",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "summary": "Update a broadcast group",
+        "tags": [
+          "Broadcast groups"
+        ]
+      }
+    },
+    "/broadcast-groups/{id}/cancel": {
+      "post": {
+        "operationId": "broadcastGroups.cancel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelBroadcastGroupResponse"
+                }
+              }
+            },
+            "description": "Every broadcast of the group still going out is canceled",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not queued",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown or revoked API key",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Restricted API key: refused to a sending-only key, a key held to one domain, a key held to one inbox (restricted_api_key)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Over the rate limit (rate_limit_exceeded, with Retry-After)",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried; sent with rate_limit_exceeded",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "summary": "Cancel a broadcast group",
+        "tags": [
+          "Broadcast groups"
+        ]
+      }
+    },
+    "/broadcast-groups/{id}/send": {
+      "post": {
+        "description": "Every broadcast of the group passes the checks a broadcast's send passes, and the capacity plan; all are then scheduled together, or none is.",
+        "operationId": "broadcastGroups.send",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendBroadcastRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendBroadcastGroupResponse"
+                }
+              }
+            },
+            "description": "Group scheduled",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not a draft",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown or revoked API key",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sending paused, or a sender that may not send; refused to a sending-only key, a key held to one domain, a key held to one inbox (restricted_api_key)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The group changed while it was being sent",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Over the rate limit (rate_limit_exceeded, with Retry-After)",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried; sent with rate_limit_exceeded",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "summary": "Send a broadcast group",
+        "tags": [
+          "Broadcast groups"
+        ]
+      }
+    },
     "/broadcasts": {
       "get": {
         "description": "Newest first, with cursor pagination: `after` takes the last id of a page and pages toward older items, `before` takes the first id and pages back toward newer ones.",
@@ -17571,6 +19399,21 @@
               }
             }
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A broadcast of a broadcast group (grouped_broadcast)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "429": {
             "content": {
               "application/json": {
@@ -17806,7 +19649,7 @@
                 }
               }
             },
-            "description": "Validation error",
+            "description": "Validation error, or a broadcast of a broadcast group (grouped_broadcast)",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -18538,7 +20381,7 @@
                 }
               }
             },
-            "description": "Validation error",
+            "description": "Validation error, or a broadcast of a broadcast group (grouped_broadcast)",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -20986,6 +22829,7 @@
     },
     "/contacts/{id}/topics": {
       "get": {
+        "description": "Newest first, with cursor pagination: `after` takes the last id of a page and pages toward older items, `before` takes the first id and pages back toward newer ones.",
         "operationId": "contacts.topics.list",
         "parameters": [
           {
@@ -20994,6 +22838,40 @@
             "required": true,
             "schema": {
               "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page size, 1-100 (default 20)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "description": "Page size, 1-100 (default 20)",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Cursor: id of the last item of the current page; returns the next page. Must be an id this list returned; there is no sentinel value.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "description": "Cursor: id of the last item of the current page; returns the next page. Must be an id this list returned; there is no sentinel value.",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Cursor: id of the first item of the current page; returns the previous page; same rule as after.",
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "description": "Cursor: id of the first item of the current page; returns the previous page; same rule as after.",
+              "format": "uuid",
               "type": "string"
             }
           }
@@ -21053,6 +22931,21 @@
               }
             },
             "description": "Not found",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -25307,6 +27200,7 @@
     },
     "/emails/{id}": {
       "delete": {
+        "description": "Deletes the email with its events, stored content and share links; an email that has not gone out also gives its volume back. An email that went out less than 7 days ago answers `409 email_recently_sent`, because bounce and complaint reports still arrive for it; the days count from the moment it was handed over for sending, whatever came of it, and the message names the earliest time it can be deleted. BillionSend extension.",
         "operationId": "emails.delete",
         "parameters": [
           {
@@ -25374,6 +27268,21 @@
               }
             },
             "description": "Not found",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The email went out less than 7 days ago",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -35097,7 +37006,44 @@
     },
     "/topics": {
       "get": {
+        "description": "Newest first, with cursor pagination: `after` takes the last id of a page and pages toward older items, `before` takes the first id and pages back toward newer ones.",
         "operationId": "topics.list",
+        "parameters": [
+          {
+            "description": "Page size, 1-100 (default 20)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "description": "Page size, 1-100 (default 20)",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Cursor: id of the last item of the current page; returns the next page. Must be an id this list returned; there is no sentinel value.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "description": "Cursor: id of the last item of the current page; returns the next page. Must be an id this list returned; there is no sentinel value.",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Cursor: id of the first item of the current page; returns the previous page; same rule as after.",
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "description": "Cursor: id of the first item of the current page; returns the previous page; same rule as after.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -35138,6 +37084,21 @@
               }
             },
             "description": "Restricted API key: refused to a sending-only key, a key held to one inbox (restricted_api_key)",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -37796,6 +39757,9 @@
     },
     {
       "name": "Broadcasts"
+    },
+    {
+      "name": "Broadcast groups"
     },
     {
       "name": "Templates"

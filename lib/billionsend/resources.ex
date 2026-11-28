@@ -597,7 +597,7 @@ defmodule BillionSend.Automations do
   @doc """
   Stop an automation.
 
-  Sets the automation to disabled: no new runs start; runs already going finish. Stopping a stopped automation answers the same.
+  Sets the automation to disabled: no new runs start; runs already going finish, unless cancel_runs cancels them. Stopping a stopped automation answers the same, and with cancel_runs cancels what is still going, so a call cut short can be repeated.
 
   `POST /automations/{id}/stop`
 
@@ -605,22 +605,24 @@ defmodule BillionSend.Automations do
 
     * `:extra_headers`, `:timeout`
   """
-  @spec stop(BillionSend.Client.t(), String.t(), keyword()) ::
+  @spec stop(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
           {:ok, term()} | {:error, BillionSend.Errors.t()}
-  def stop(client, id, opts \\ []) do
+  def stop(client, id, params \\ nil, opts \\ []) do
+    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
+
     BillionSend.Client.call(
       client,
       "POST",
       "/automations/#{BillionSend.Client.encode_path(id)}/stop",
       opts,
-      []
+      body: params
     )
   end
 
-  @doc "Like `stop/3`, but returns the answer or raises."
-  @spec stop!(BillionSend.Client.t(), String.t(), keyword()) :: term()
-  def stop!(client, id, opts \\ []) do
-    BillionSend.Client.unwrap!(stop(client, id, opts))
+  @doc "Like `stop/4`, but returns the answer or raises."
+  @spec stop!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
+  def stop!(client, id, params \\ nil, opts \\ []) do
+    BillionSend.Client.unwrap!(stop(client, id, params, opts))
   end
 end
 
@@ -838,6 +840,223 @@ defmodule BillionSend.Brand.Logo do
   @spec delete!(BillionSend.Client.t(), keyword()) :: term()
   def delete!(client, opts \\ []) do
     BillionSend.Client.unwrap!(delete(client, opts))
+  end
+end
+
+defmodule BillionSend.BroadcastGroups do
+  @moduledoc """
+  Operations on broadcast groups.
+  """
+  @doc """
+  List broadcast groups.
+
+  Newest first, with cursor pagination: `after` takes the last id of a page and pages toward older items, `before` takes the first id and pages back toward newer ones.
+
+  `GET /broadcast-groups`
+
+  Options:
+
+    * `:limit` - query `limit`
+    * `:after` - query `after`
+    * `:before` - query `before`
+    * `:extra_headers`, `:timeout`
+  """
+  @spec list(BillionSend.Client.t(), keyword()) :: {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def list(client, opts \\ []) do
+    BillionSend.Client.call(client, "GET", "/broadcast-groups", opts,
+      query: [{"limit", :limit}, {"after", :after}, {"before", :before}]
+    )
+  end
+
+  @doc "Like `list/2`, but returns the answer or raises."
+  @spec list!(BillionSend.Client.t(), keyword()) :: term()
+  def list!(client, opts \\ []) do
+    BillionSend.Client.unwrap!(list(client, opts))
+  end
+
+  @doc """
+  Every item of `list`, as a lazy Stream that fetches pages as it goes.
+
+  Walks in the list's own order, from `:after` (or the first page) on; pass
+  `:before` instead to walk the other way. Raises the errors `list!` raises.
+  """
+  @spec list_all(BillionSend.Client.t(), keyword()) :: Enumerable.t()
+  def list_all(client, opts \\ []) do
+    BillionSend.Pagination.stream(
+      fn page_after, page_before ->
+        list(client, Keyword.merge(opts, after: page_after, before: page_before))
+      end,
+      Keyword.get(opts, :after),
+      Keyword.get(opts, :before)
+    )
+  end
+
+  @doc """
+  Create a broadcast group.
+
+  BillionSend extension: one send from several sending domains. The group holds a broadcast per domain, all with the same content, from the same name and local part, to the same audience; each contact is mailed from one of the domains and keeps it for later sends.
+
+  `POST /broadcast-groups`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec create(BillionSend.Client.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def create(client, params, opts \\ []) do
+    BillionSend.Client.call(client, "POST", "/broadcast-groups", opts, body: params)
+  end
+
+  @doc "Like `create/3`, but returns the answer or raises."
+  @spec create!(BillionSend.Client.t(), map() | list() | nil, keyword()) :: term()
+  def create!(client, params, opts \\ []) do
+    BillionSend.Client.unwrap!(create(client, params, opts))
+  end
+
+  @doc """
+  Retrieve a broadcast group.
+
+  `GET /broadcast-groups/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec get(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def get(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "GET",
+      "/broadcast-groups/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `get/3`, but returns the answer or raises."
+  @spec get!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def get!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(get(client, id, opts))
+  end
+
+  @doc """
+  Update a broadcast group.
+
+  Only while all its broadcasts are drafts. Its broadcasts are rewritten: one kept keeps its id, a new domain gets one, a removed domain's is deleted.
+
+  `PATCH /broadcast-groups/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec update(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def update(client, id, params \\ nil, opts \\ []) do
+    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
+
+    BillionSend.Client.call(
+      client,
+      "PATCH",
+      "/broadcast-groups/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      body: params
+    )
+  end
+
+  @doc "Like `update/4`, but returns the answer or raises."
+  @spec update!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
+  def update!(client, id, params \\ nil, opts \\ []) do
+    BillionSend.Client.unwrap!(update(client, id, params, opts))
+  end
+
+  @doc """
+  Delete a broadcast group.
+
+  Only while all its broadcasts are drafts; they are deleted with it.
+
+  `DELETE /broadcast-groups/{id}`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec remove(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def remove(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "DELETE",
+      "/broadcast-groups/#{BillionSend.Client.encode_path(id)}",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `remove/3`, but returns the answer or raises."
+  @spec remove!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def remove!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(remove(client, id, opts))
+  end
+
+  @doc """
+  Cancel a broadcast group.
+
+  `POST /broadcast-groups/{id}/cancel`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec cancel(BillionSend.Client.t(), String.t(), keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def cancel(client, id, opts \\ []) do
+    BillionSend.Client.call(
+      client,
+      "POST",
+      "/broadcast-groups/#{BillionSend.Client.encode_path(id)}/cancel",
+      opts,
+      []
+    )
+  end
+
+  @doc "Like `cancel/3`, but returns the answer or raises."
+  @spec cancel!(BillionSend.Client.t(), String.t(), keyword()) :: term()
+  def cancel!(client, id, opts \\ []) do
+    BillionSend.Client.unwrap!(cancel(client, id, opts))
+  end
+
+  @doc """
+  Send a broadcast group.
+
+  Every broadcast of the group passes the checks a broadcast's send passes, and the capacity plan; all are then scheduled together, or none is.
+
+  `POST /broadcast-groups/{id}/send`
+
+  Options:
+
+    * `:extra_headers`, `:timeout`
+  """
+  @spec send(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) ::
+          {:ok, term()} | {:error, BillionSend.Errors.t()}
+  def send(client, id, params \\ nil, opts \\ []) do
+    {params, opts} = BillionSend.Client.optional_body(params, opts, true)
+
+    BillionSend.Client.call(
+      client,
+      "POST",
+      "/broadcast-groups/#{BillionSend.Client.encode_path(id)}/send",
+      opts,
+      body: params
+    )
+  end
+
+  @doc "Like `send/4`, but returns the answer or raises."
+  @spec send!(BillionSend.Client.t(), String.t(), map() | list() | nil, keyword()) :: term()
+  def send!(client, id, params \\ nil, opts \\ []) do
+    BillionSend.Client.unwrap!(send(client, id, params, opts))
   end
 end
 
@@ -1824,10 +2043,15 @@ defmodule BillionSend.Contacts.Topics do
   @doc """
   List contact topics.
 
+  Newest first, with cursor pagination: `after` takes the last id of a page and pages toward older items, `before` takes the first id and pages back toward newer ones.
+
   `GET /contacts/{id}/topics`
 
   Options:
 
+    * `:limit` - query `limit`
+    * `:after` - query `after`
+    * `:before` - query `before`
     * `:extra_headers`, `:timeout`
   """
   @spec list(BillionSend.Client.t(), String.t(), keyword()) ::
@@ -1838,7 +2062,7 @@ defmodule BillionSend.Contacts.Topics do
       "GET",
       "/contacts/#{BillionSend.Client.encode_path(id)}/topics",
       opts,
-      []
+      query: [{"limit", :limit}, {"after", :after}, {"before", :before}]
     )
   end
 
@@ -1846,6 +2070,23 @@ defmodule BillionSend.Contacts.Topics do
   @spec list!(BillionSend.Client.t(), String.t(), keyword()) :: term()
   def list!(client, id, opts \\ []) do
     BillionSend.Client.unwrap!(list(client, id, opts))
+  end
+
+  @doc """
+  Every item of `list`, as a lazy Stream that fetches pages as it goes.
+
+  Walks in the list's own order, from `:after` (or the first page) on; pass
+  `:before` instead to walk the other way. Raises the errors `list!` raises.
+  """
+  @spec list_all(BillionSend.Client.t(), String.t(), keyword()) :: Enumerable.t()
+  def list_all(client, id, opts \\ []) do
+    BillionSend.Pagination.stream(
+      fn page_after, page_before ->
+        list(client, id, Keyword.merge(opts, after: page_after, before: page_before))
+      end,
+      Keyword.get(opts, :after),
+      Keyword.get(opts, :before)
+    )
   end
 
   @doc """
@@ -2444,6 +2685,8 @@ defmodule BillionSend.Emails do
 
   @doc """
   Delete an email.
+
+  Deletes the email with its events, stored content and share links; an email that has not gone out also gives its volume back. An email that went out less than 7 days ago answers `409 email_recently_sent`, because bounce and complaint reports still arrive for it; the days count from the moment it was handed over for sending, whatever came of it, and the message names the earliest time it can be deleted. BillionSend extension.
 
   `DELETE /emails/{id}`
 
@@ -5446,21 +5689,45 @@ defmodule BillionSend.Topics do
   @doc """
   List topics.
 
+  Newest first, with cursor pagination: `after` takes the last id of a page and pages toward older items, `before` takes the first id and pages back toward newer ones.
+
   `GET /topics`
 
   Options:
 
+    * `:limit` - query `limit`
+    * `:after` - query `after`
+    * `:before` - query `before`
     * `:extra_headers`, `:timeout`
   """
   @spec list(BillionSend.Client.t(), keyword()) :: {:ok, term()} | {:error, BillionSend.Errors.t()}
   def list(client, opts \\ []) do
-    BillionSend.Client.call(client, "GET", "/topics", opts, [])
+    BillionSend.Client.call(client, "GET", "/topics", opts,
+      query: [{"limit", :limit}, {"after", :after}, {"before", :before}]
+    )
   end
 
   @doc "Like `list/2`, but returns the answer or raises."
   @spec list!(BillionSend.Client.t(), keyword()) :: term()
   def list!(client, opts \\ []) do
     BillionSend.Client.unwrap!(list(client, opts))
+  end
+
+  @doc """
+  Every item of `list`, as a lazy Stream that fetches pages as it goes.
+
+  Walks in the list's own order, from `:after` (or the first page) on; pass
+  `:before` instead to walk the other way. Raises the errors `list!` raises.
+  """
+  @spec list_all(BillionSend.Client.t(), keyword()) :: Enumerable.t()
+  def list_all(client, opts \\ []) do
+    BillionSend.Pagination.stream(
+      fn page_after, page_before ->
+        list(client, Keyword.merge(opts, after: page_after, before: page_before))
+      end,
+      Keyword.get(opts, :after),
+      Keyword.get(opts, :before)
+    )
   end
 
   @doc """
@@ -6168,6 +6435,7 @@ defmodule BillionSend.Resources do
       BillionSend.Automations.Runs,
       BillionSend.Brand,
       BillionSend.Brand.Logo,
+      BillionSend.BroadcastGroups,
       BillionSend.Broadcasts,
       BillionSend.ContactProperties,
       BillionSend.Contacts,

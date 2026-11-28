@@ -2,7 +2,7 @@
 
 The official Elixir client for the [BillionSend](https://billionsend.com) API: send and receive email, run inboxes for agents and people, manage domains, contacts, broadcasts, templates, webhooks and more.
 
-- Every operation of the API (186), named after the API's own `operationId`s.
+- Every operation of the API (193), named after the API's own `operationId`s.
 - No dependencies: OTP's `:httpc` and `:ssl`, and Elixir's built-in `JSON`.
 - Sends that never go out twice, retries, lazy paging streams, live event streams that resume where they stopped, and webhook signature verification.
 
@@ -145,9 +145,10 @@ end
 | `BillionSend.Audiences.Contacts` | contacts addressed through an audience |
 | `BillionSend.ContactProperties`, `.Segments` (`.Contacts`), `.Topics` | contact data and grouping |
 | `BillionSend.Broadcasts` | create, list, get, update, delete, send, duplicate, cancel, recipients, clicked_links |
+| `BillionSend.BroadcastGroups` | create, list, get, update, remove, send, cancel: one send from several of your domains, a broadcast per domain |
 | `BillionSend.Templates` | create, list, get, update, delete, publish, duplicate |
 | `BillionSend.Webhooks` (`.Events`) | create, list, get, update, delete, rotate_signing_secret; `Events.list`, `Events.get`, `Events.replay`, `Events.Attempts.list` |
-| `BillionSend.Automations` (`.Runs`) | create, list, get, update, remove, validate, duplicate, simulate, stop, metrics; `Runs.list`, `Runs.get`, `Runs.cancel` |
+| `BillionSend.Automations` (`.Runs`) | create, list, get, update, remove, validate, duplicate, simulate, stop (takes an optional body: `cancel_runs`), metrics; `Runs.list`, `Runs.get`, `Runs.cancel` |
 | `BillionSend.Events` | custom events: create, list, get, update, remove, send |
 | `BillionSend.Logs`, `.OauthGrants` | request logs (list, get) and OAuth grants (list, revoke) |
 | `BillionSend.Suppressions` (`.Batch`), `.Unsubscribes` | suppression list (`Batch.add`, `Batch.remove`) and opt-outs; an entry is for one address or, with `domain:` / `domains:`, for a whole domain: its `"email"` is `nil` then (`"kind"` says which, `"removable"` is `false` for a bounce or a complaint), and `list(client, kind: "all")` lists both |
@@ -189,7 +190,7 @@ Each function is named after its operation's `operationId` in the API document: 
 
 Arguments come in this order: the client, the path parameters (`BillionSend.Domains.get(client, domain_id)`; a `nil` or empty one raises `ArgumentError` instead of calling the whole collection), the request body as a map, or a keyword list, which is sent as an object (`BillionSend.Domains.create(client, %{name: "acme.dev"})`), then a keyword list of options: the query and header parameters (`BillionSend.Emails.list(client, limit: 50)`; a list parameter takes a list), `:extra_headers` and `:timeout`. A body the operation does not require may be left out (`BillionSend.Domains.verify(client, domain_id)`). An unknown option, or a missing required one, raises `ArgumentError` before anything is sent. Anything the functions do not cover goes through `BillionSend.Client.request(client, "GET", "/path", query: [...])`.
 
-The functions cover all 186 operations of the published OpenAPI document, but they are built from the snapshot in `openapi/api.openapi.json`, which as of 26 November 2026 is behind the published document in a few fields: the `note` of a suppression (set on `Suppressions.create` and `Suppressions.Batch.add`, returned by `Suppressions.get` and `Suppressions.list`) and `sending_limits` in a domain's answer. Request bodies and answers are plain maps, so those fields are sent and returned as they are; the functions' own documentation and the contract tests do not know them.
+The functions cover all 193 operations of the published OpenAPI document and are built from the snapshot in `openapi/api.openapi.json`, which is the published document as of 28 November 2026. Request bodies and answers are plain maps, so a field the API adds later is sent and returned as it is.
 
 ## Pagination
 
